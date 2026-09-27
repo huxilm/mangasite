@@ -188,7 +188,19 @@
   color: #666;
   text-align: left;
 }
-.nav-type:hover .list{
+/* 面板什么时候显示。两种触发方式，必须写在同一组选择器里。
+   ⚠ :focus-within 不能省，也不能另起一条规则。原因是这一轮给面板里加了输入框：
+   :hover 的含义是「鼠标此刻正压在我或我的后代身上」，它随时会丢 ——
+   指针抖一下、React 重渲染、鼠标挪到面板边缘，任何一下都会让它不成立，
+   面板就开始淡出（下面 transition 里那条 visibility 0.2s 是缓冲，不是阻止）。
+   点胶囊只按一下、无所谓，但打字要求指针一动不动地停着 —— 用 hover 管打字，
+   就是「按完一个键面板收回」这个 bug。
+   :focus-within 的含义是「我自己或我的任何后代拿到了焦点」，由焦点决定、
+   和指针无关：点进输入框之后它一直成立，鼠标飘出面板也不会关。
+   ⚠ 两条触发条件必须共用同一份 opacity/visibility/transform。另起一条规则的话
+   就是两份要同步改的声明，改漏一处会变成「悬停能开、聚焦不能开」这种一半坏的状态 */
+.nav-type:hover .list,
+.nav-type:focus-within .list{
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
@@ -402,4 +414,83 @@
   border: none;
   cursor: pointer;
   font: inherit;
+}
+
+/* ===== 下面这一组是给「分类」下拉面板里新增的增删控件写的 ===== */
+
+/* 一条 = 一个胶囊 + 一个删除按钮，要横着排。
+   <li> 默认是 display: list-item（块级，占满一行），不改这里的话
+   胶囊和 ✕ 会上下分成两行 —— .list-items 的 gap 0.4rem 只管 <li> 之间，
+   管不到 <li> 内部。
+   gap 0.15rem 比 .list-items 的 0.4rem 小是故意的：✕ 是属于左边那个胶囊的，
+   两者要挨得比「两个胶囊之间」更近，否则看不出 ✕ 删的是哪一个 */
+.list li{
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+/* 删除按钮。
+   ⚠ 必须自己写全套样式：胶囊那套（背景、边框、圆角、内边距、颜色）来自
+   `.list li a` 这个**元素选择器**，<button> 一点都沾不到，不写就是个
+   灰底的浏览器默认按钮，比旁边的胶囊高、还带 2px outset 边框。
+   font: inherit 不能省，且必须写在 font-size 前面：表单控件不继承字体，
+   浏览器 UA 样式表给它写死了 font: 400 13.3333px Arial，只写 font-size 的话
+   字号是改了、字体还是 Arial（和 .search-button 那条注释是同一个坑） */
+.list-item-del{
+  background: none;
+  border: none;
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+  font: inherit;
+  font-size: 0.7rem;
+  /* line-height: 1 让按钮的高度就是字号本身，不会被默认行高撑高，
+     和旁边胶囊的高度对不齐 */
+  line-height: 1;
+  /* 写死的浅灰，没跟着主题走。理由和 .list li a 的 #333 一样：
+     面板底色是写死的 #fff，用 var(--text) 的话深色模式下是浅色字压白底 */
+  color: #bbb;
+  cursor: pointer;
+}
+.list-item-del:hover{
+  color: #e0591c;
+}
+
+/* 每组末尾的「新增」行：一个输入框 + 一个 ＋ 按钮，横着排 */
+.list-new{
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+/* 输入框。
+   flex: 1 让按钮占完剩下的宽度都归它 —— 和 .search-input 一个写法。
+   ⚠ min-width: 0 不能省：flex 子项的 min-width 默认是 auto，
+   含义是「不许压得比内容还窄」，而 <input> 的固有宽度来自 size 属性
+   （默认 20 字符，约 170px），不改成 0 它就不肯缩，会把面板撑破。
+   ⚠ font: inherit 同样不能省（理由见上面 .list-item-del 那条），
+   font-size 写在它后面。顺带把 0.8rem 定下来 —— 面板宽 230px，
+   输入框要和里面的胶囊（0.85rem）差不多大，用表单默认的 13.33px 会显大 */
+.list-new-input{
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #ddd;
+  border-radius: 0.3rem;
+  padding: 0.2rem 0.4rem;
+  font: inherit;
+  font-size: 0.8rem;
+}
+.list-new-btn{
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 0.3rem;
+  padding: 0 0.4rem;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #666;
+  /* 和 .search-button 一样：不加会被挤扁（flex 子项默认 flex-shrink: 1） */
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.list-new-btn:hover{
+  background: #f2f2f2;
+  color: #333;
 }

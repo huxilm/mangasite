@@ -33,10 +33,29 @@ const PENDING_KEY = 'mangasite_pending_upload'
 // 刻意不收 svg：它是 XML 文档，里面能嵌 <script>，被直接打开时脚本会跑起来
 const IMAGE_EXTS = ['jpg', 'jpeg', 'jfif', 'jpe', 'png', 'gif', 'webp', 'avif']
 
-// 标签盒里列出来的候选标签。现在是占位数据，将来换成真正的清单
-// （从后端取、或者从已有漫画的 tags 里统计都行，换的是这一行的来源，
-// 用它的那段 JSX 不用动）
-const TAG_OPTIONS = Array.from({ length: 12 }, (_, i) => `占位${i + 1}`)
+// 标签盒里的候选标签：从导航那份数据（nav_link 表）取，
+// 和 App.tsx 的 loadNavLinks 打的是同一个接口，区别只在「留下什么」——
+// 那边要整行（得按 group_name 分组），这边只要 name。
+//
+// ⚠ 必须去重。nav_link 的主键是 (group_name, name)，所以「分类2」「分类3」
+// 在「主题」和「作者」两个组里各有一行，接口会原样返回两条。不去重的话：
+//   ① 两个 chip 的 key 一样，React 在控制台报
+//      "Encountered two children with the same key"
+//   ② 两个 chip 的选中状态都等于 tagList.includes('分类2')，点一个两个一起亮
+// 去重保留服务端返回的先后顺序（那边已经 ORDER BY 过了）。不在前端重排 ——
+// 前端算不出服务端的顺序，自己排会和刷新后对不上
+//
+// 两个组都取，不过滤「作者」—— 定的是「作者」组里的项也当标签用。
+// 拿到非数组（比如 500 时返回的 {error}）就原样丢弃，和 loadNavLinks 一样
+function loadTagOptions(setOptions: (list: string[]) => void) {
+  fetch('/api/nav-links')
+    .then(r => r.json())
+    .then(data => {
+      if (!Array.isArray(data)) return
+      setOptions([...new Set(data.map(l => l.name))])
+    })
+    .catch(() => { })
+}
 
 // ===== 选中的文件夹在内存里的样子 =====
 //
@@ -463,6 +482,10 @@ function UploadModal({ onClose }: { onClose: () => void }) {
     }
   })
 
+  // 标签盒里的候选标签。初值空数组 —— 刚打开弹窗那一瞬间盒子是空的，
+  // 请求回来才长出 chip（本机请求，基本看不到这一下）
+  const [tagOptions, setTagOptions] = useState<string[]>([])
+
   // 已成功上传的页。键是 '话号:页序号'。
   // 必须和「当前这棵目录树 + 当前漫画 id」绑在一起，树一变就清空。
   // 不绑的话：传 A 文件夹传到 150 页失败 → 用户改选 B 文件夹再点重试 →
@@ -486,6 +509,13 @@ function UploadModal({ onClose }: { onClose: () => void }) {
   // 卸载时把攒着的那个定时器清掉，否则它会在组件没了之后再 setState
   useEffect(() => () => {
     if (flushTimerRef.current !== null) clearTimeout(flushTimerRef.current)
+  }, [])
+
+  // 拉一次候选标签。每次打开弹窗都会拉 —— App.tsx 里是
+  // {showUpload && <UploadModal/>}，关掉就是卸载，再打开是重新挂载。
+  // 所以你刚在导航「分类」里加的标签，下次开上传弹窗就在盒子里
+  useEffect(() => {
+    loadTagOptions(setTagOptions)
   }, [])
 
   // 收敛过的进度更新。到点就立刻刷，没到点就挂一个定时器，
@@ -941,24 +971,28 @@ function UploadModal({ onClose }: { onClose: () => void }) {
           {/* 标签盒。只在「新本」渲染 —— 标签是 POST /api/manga 的参数，
               续本压根不建漫画行，这个盒子对续本没有意义。
               按钮必须写 type="button"：不写的话在 <form> 里默认类型就是 submit，
-              点一下标签会顺手把整个表单提交出去 */}
-          {isNew && (
+              点一下标签会顺手把整个表单提交出去。
+              ⚠ tagOptions.length > 0 这个条件不能省：候选标签现在是从
+              nav_link 表取的（见上面 loadTagOptions），把导航里的项全删光
+              它就是空数组，而 .tag-box 有 border 和 padding
+              （UploadModal.css:126-140），空着会剩一个孤零零的灰方框 */}
+          {isNew && tagOptions.length > 0 && (
             <div className="tag-box">
               {/* <div className="tag-box-title">标签</div> */}
               <div className="tag-list">
-                {TAG_OPTIONS.map(t => {
+                {tagOptions.map(t => {
                   // 选中与否完全由 tags 算出来（判断规则就是上面那个 tagList），
-                  // 所以手打进输入框的「占位3」也会跟着亮 —— 不需要额外的 state
-                  const on = tagList.includes(t)
+                  // 所以手打进输入框的「分类2」也会跟着亮 —— 不需要额外的 state
+                  const isOn = tagList.includes(t)
                   return (
                     <button
                       type="button"
                       key={t}
-                      className={on ? 'tag-chip tag-chip-on' : 'tag-chip'}
+                      className={isOn ? 'tag-chip tag-chip-on' : 'tag-chip'}
                       // aria-pressed 是给读屏软件的：这个按钮现在是「开关」，
                       // 光靠颜色变紫，看不见颜色的人不知道它按没按过。
                       // 写上去之后读屏会念「已按下/未按下」。和视觉上的高亮是同一份状态
-                      aria-pressed={on}
+                      aria-pressed={isOn}
                       onClick={() => handleTagClick(t)}
                     >{t}</button>
                   )

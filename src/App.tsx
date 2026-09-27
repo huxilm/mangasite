@@ -9,12 +9,32 @@ import LoginModal from './LoginModal.tsx'
 import UploadModal from './UploadModal.tsx'
 import UserInfo from './UserInfo.tsx'
 
+type NavLink = { group_name: string; name: string }
+
+// 「分类」下拉里固定显示这两组、按这个顺序。它和后端 server/index.js 里的
+// NAV_GROUPS 是同一份约定（那边拿它挡不合法的分组名）—— 改一处必须改另一处
+const NAV_GROUPS = ['主题', '作者']
+
+// 拉一遍导航链接。抽成模块级函数是为了让「挂载时」和「增删之后」共用同一份 ——
+// UserInfo.tsx 里的 loadSeries 就是这么写的。
+// 拿到非数组（比如 500 时返回的 {error}）就原样丢弃，不让它污染 state
+function loadNavLinks(setLinks: (list: NavLink[]) => void) {
+  fetch('/api/nav-links')
+    .then(r => r.json())
+    .then(data => { if (Array.isArray(data)) setLinks(data) })
+    .catch(() => { })
+}
+
 function App() {
   // 分别控制「注册弹窗」「登录弹窗」「上传弹窗」是否显示
   const [showRegister, setShowRegister] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
   const [user, setUser] = useState<{ userId: number; username: string } | null>(null)
+  const [navLinks, setNavLinks] = useState<NavLink[]>([])
+  // 两个分组各有一个输入框，所以草稿文本得按分组名分开存 ——
+  // 共用一个字符串的话，在「主题」里打一半切到「作者」会把字带过去
+  const [draft, setDraft] = useState<Record<string, string>>({})
 
   // 检查本地是否有 token，如果有就去后端验证它
   function fetchMe() {
@@ -33,14 +53,48 @@ function App() {
       })
   }
 
-  // 组件挂载时检查 token
+  // 组件挂载时检查 token，顺便把导航链接拉一遍。
+  // ⚠ 两件事都只做一次，所以合在同一个 effect 里，别为 loadNavLinks 单开一个
   useEffect(() => {
     fetchMe()
+    loadNavLinks(setNavLinks)
   }, [])
   // 处理登出：清除本地 token 并清掉登录状态
   const handleLogout = () => {
     localStorage.removeItem('mangasitetoken')  // 删掉本地 token
     setUser(null)                              // 清掉登录状态
+  }
+
+  // 新增一条导航链接。
+  // 成功后清空那一组的输入框，再整份重新拉一遍 —— 和 UserInfo 里系列的
+  // 增删同一个做法。不往 state 里本地拼一条，是因为服务端返回的顺序
+  // （按 created_at，同一秒时按 name）前端没法自己算准，拼出来的顺序
+  // 和刷新后的顺序会对不上
+  const handleAddNavLink = async (group: string) => {
+    const name = (draft[group] ?? '').trim()
+    if (!name) return
+    const data = await (await fetch('/api/nav-links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ group, name }),
+    })).json()
+    if (data.error) return alert(data.error)
+    setDraft(prev => ({ ...prev, [group]: '' }))
+    loadNavLinks(setNavLinks)
+  }
+
+  // 删除一条。删除不可逆，先问一句
+  // （和 UserInfo.tsx 删系列一样用原生 confirm，没做自定义弹窗）
+  const handleRemoveNavLink = async (group: string, name: string) => {
+    if (!confirm(`确定从「${group}」里删掉「${name}」吗？`)) return
+    // ⚠ 这里的 encodeURIComponent 不能省：名称是自由文本，名字里只要有个 &
+    // 就会把 query 拆成两个参数，服务端收到的是半截名字，删不掉
+    const data = await (await fetch(
+      `/api/nav-links?group=${encodeURIComponent(group)}&name=${encodeURIComponent(name)}`,
+      { method: 'DELETE' }
+    )).json()
+    if (data.error) return alert(data.error)
+    loadNavLinks(setNavLinks)
   }
 
   return (
@@ -92,38 +146,52 @@ function App() {
                     ⚠ 标题写不进 <ul> 里 —— <ul> 的子元素只允许 <li>，
                     所以「标题 + <ul>」得有个共同的父元素。
                     它顺带把组内间距（0.4rem）和组间间距（0.75rem）分成两档 */}
-                <div className="list-group">
-                  <div className="list-group-title">主题</div>
-                  <ul className="list-items">
-                    <li><Link to={`/?tag=${encodeURIComponent('分类1')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类2')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                  </ul>
-                </div>
-                <div className="list-group">
-                  <div className="list-group-title">作者</div>
-                  <ul className="list-items">
-                    <li><Link to={`/?tag=${encodeURIComponent('FRLEXZ')}`}>FRLEXZ</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类2')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                    <li><Link to={`/?tag=${encodeURIComponent('分类3')}`}>占位</Link></li>
-                  </ul>
-                </div>
+                {/* 两个大类都从 navLinks 渲染（数据在 nav_link 表里，见 schema.sql）。
+                    原来这里是 22 个写死的 <Link>，其中 18 个叫「占位」 —— 想改一次
+                    列表就得改代码重新构建，这一轮把它换成了可增删的数据 */}
+                {NAV_GROUPS.map(group => (
+                  <div className="list-group" key={group}>
+                    <div className="list-group-title">{group}</div>
+                    {/* key 用 name 而不是下标：同一组内名称唯一（表的主键保证），
+                        而下标在删掉中间一项之后会整体前移，React 会拿旧的 DOM
+                        去顶新的项，删错行、输入框里的字乱跳 */}
+                    <ul className="list-items">
+                      {navLinks.filter(l => l.group_name === group).map(l => (
+                        <li key={l.name}>
+                          {/* 仍然用 <Link>（渲染出来是 <a>）—— 上面那段注释里说的
+                              胶囊样式来自 `.list li a` 这个元素选择器，换成 <button>
+                              就一点样式都沾不到 */}
+                          <Link to={`/?tag=${encodeURIComponent(l.name)}`}>{l.name}</Link>
+                          <button
+                            type="button"
+                            className="list-item-del"
+                            title={`删除「${l.name}」`}
+                            onClick={() => handleRemoveNavLink(group, l.name)}
+                          >✕</button>
+                        </li>
+                      ))}
+                    </ul>
+                    {/* 新增行放在 </ul> 之后、.list-group 里面。
+                        ⚠ 不能塞进 <ul>：<ul> 的子元素只允许 <li>（就是这条注释
+                          上面说的那个约束）。放进 .list-group（flex column,
+                        gap 0.4rem）则自动和上面的胶囊保持组内间距，
+                        也会把下面那一组正确地推下去，不用手工算位置 */}
+                    <div className="list-new">
+                      <input
+                        className="list-new-input"
+                        placeholder={`新增${group}`}
+                        value={draft[group] ?? ''}
+                        onChange={e => setDraft(prev => ({ ...prev, [group]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddNavLink(group) }}
+                      />
+                      <button
+                        type="button"
+                        className="list-new-btn"
+                        onClick={() => handleAddNavLink(group)}
+                      >＋</button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 

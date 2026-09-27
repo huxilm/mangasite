@@ -904,6 +904,74 @@ app.delete('/api/series/:id', auth, async (req, res) => {
   }
 });
 
+// ===== 导航栏「分类」下拉里的两组链接 =====
+// 存在 nav_link 表（见 schema.sql）。和那三个上传接口一样**不鉴权** ——
+// 本项目按「本地单人使用」设计。⚠ 部署到公网的话，任何人都能改你导航栏的分类。
+
+// 只认这两个组名。为什么要在这里挡一道：group_name 是主键的一部分，
+// 放任意值进来就等于让请求方往库里塞新分组，而前端只渲染这两组 ——
+// 那些行会静静地堆在库里，永远不会显示出来，也没有任何界面能删掉它们
+const NAV_GROUPS = ['主题', '作者'];
+
+//接口: 导航栏的全部链接
+app.get('/api/nav-links', async (req, res) => {
+  try {
+    // ORDER BY 带上 name 是因为 created_at 只精确到秒：同一秒里连着加两条
+    // 会排不出先后，加个 name 兜底让顺序稳定（不然每次刷新顺序可能变）
+    const [rows] = await pool.query(
+      'SELECT group_name, name, created_at FROM nav_link ORDER BY group_name, created_at, name'
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '查询失败' });
+  }
+});
+
+//接口: 新增一条导航链接
+app.post('/api/nav-links', async (req, res) => {
+  const group = String(req.body?.group ?? '').trim();
+  const name = String(req.body?.name ?? '').trim();
+  if (!NAV_GROUPS.includes(group)) return res.status(400).json({ error: '分组不对' });
+  if (!name) return res.status(400).json({ error: '名称不能为空' });
+  // name 列是 varchar(50)，超了 MySQL 默认会截断或报错（取决于 SQL 模式），
+  // 先在这里挡掉，让错误信息说清楚是哪个字段的问题
+  if (name.length > 50) return res.status(400).json({ error: '名称不能超过 50 个字符' });
+
+  try {
+    await pool.query('INSERT INTO nav_link (group_name, name) VALUES (?, ?)', [group, name]);
+    res.status(201).json({ group, name });
+  } catch (err) {
+    // 主键 (group_name, name) 挡下的重名
+    if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: '这一组里已经有同名的了' });
+    console.error(err);
+    res.status(500).json({ error: '创建失败' });
+  }
+});
+
+//接口: 删除一条导航链接
+// 为什么要删哪一条是放在 query 里，而不是像 DELETE /api/series/:id 那样放路径：
+// 这里的「主键」是用户自由输入的文本，可能含 / # + 这些字符 ——
+// 放进路径段要么被 Express 拆错（/ 会被当成层级），要么得来回编码。
+// query 里这些字符都有确定的编码方式，没有歧义
+app.delete('/api/nav-links', async (req, res) => {
+  const group = String(req.query.group ?? '').trim();
+  const name = String(req.query.name ?? '').trim();
+  if (!group || !name) return res.status(400).json({ error: '缺少 group 或 name' });
+
+  try {
+    const [result] = await pool.query(
+      'DELETE FROM nav_link WHERE group_name = ? AND name = ?',
+      [group, name]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: '这一项不存在' });
+    res.json({ message: 'ok' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '删除失败' });
+  }
+});
+
 //接口: 把某本收藏放进系列（seriesId 传 null 表示移出系列，回到未分类）
 app.put('/api/favorites/:mangaId/series', auth, async (req, res) => {
   const { mangaId } = req.params;
