@@ -23,6 +23,10 @@ server/uploads/
 # git show <旧提交>:server/index.js 照样能读出来。这条规则必须一直生效
 .env
 .env.*
+# ⚠ 这行反选不能少，也不能挪到 .env.* 上面去 ——
+# gitignore 是「后面的规则覆盖前面的」，要推翻上面那条就得排在它后面。
+# 少了它 .env.* 会把 .env.example 一起挡掉，模板文件就提交不上去了
+!.env.example
 
 # Editor directories and files
 .vscode/*
