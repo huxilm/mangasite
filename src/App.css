@@ -1,0 +1,405 @@
+.temp{
+  display: none;
+}
+.header{
+  width: 100%;
+  min-width: 200px;
+  /* 原来是 4rem（一行的高度）。.nav 现在是上下两行（2rem + 4rem），所以加高到 6rem。
+     这个值必须是「确定高度」，不能改成 auto / min-height —— 下面有十几个规则写着
+     height:100%，全靠它撑；父元素高度一旦是 auto，这些百分比会全部塌成内容高度 */
+  height: 6rem;
+  padding-left: 6%;
+  padding-right: 6%;
+  box-sizing: border-box;
+  display: flex;
+  position: relative;
+}
+.logo{
+  /* 不能再用 height:100%：源图是 960×960 的正方形，header 长到 6rem 后
+     height:100% + width:4rem 会变成 4:6 的竖长方形，图被纵向拉伸 50%。
+     定死 4rem 保持正方形 */
+  height: 5rem;
+  width: 5rem;
+  /* 定高之后 align-self 的默认值 stretch 就失效了，不写这行 logo 会贴到 header 顶部 */
+  align-self: center;
+  display: flex;
+  /* 原来是写死的 #fff。背景色不只垫在图片下面，也会涂满 padding 区 ——
+     也就是右边那 10px 的空隙。深色模式下页面是深色的，那一竖条却是白的，
+     很显眼。换成 var(--bg)，跟着主题走 */
+  background-color: var(--bg);
+  padding-right: 10px;
+}
+.nav{
+  height: 100%;
+  flex:1;
+  display: flex;
+  /* 原来是横向排一排，现在改成竖向两行：第一行是 .nav-links，第二行是 .search */
+  flex-direction: column;
+  /* 这里原来有 align-items: center，删掉了。
+     在 column 方向下 align-items 管的是「水平」轴，center 会让每个子项收缩到内容宽度，
+     搜索框就铺不满整行了。删掉后回落到默认的 stretch。
+     注意 stretch 只对「宽度是 auto」的子项生效：.nav-links 没写宽度 → 铺满整行；
+     .search 写了 width: 13rem（宽度已定）→ stretch 对它无效，它会落在行的最左边，
+     于是两行的左端对齐、右端也都在 13rem 处对齐 */
+}
+/* 第一行：首页 / 分类 / 上传。
+   高度写死 2rem 而不是百分比：要和下面 .search 的 4rem 凑成 6rem，
+   正好等于 .header 的高度。改 .header 高度时这两处要一起改。
+   宽度上：4rem + 缝1.5rem + 4rem + 缝1.5rem + 4rem = 15rem，
+   下面 .search 的 width 就是照这个数写的，
+   改 .home / .nav-type / .upload 任何一个的宽度，都要回头改这一行和 .search 的 15rem */
+.nav-links{
+  display: flex;
+  align-items: center;
+  height: 2rem;
+  /* 定死 15rem 是为了和下面 .search 一样宽，两行的左右两端才对得齐 */
+  width: 15rem;
+  /* 三项之间各留 1.5rem。不是 justify-content: space-between ——
+     那个在容器变宽时会自己改间距，这里宽度是定死的，gap 更直白 */
+  gap: 1.5rem;
+}
+.home{
+  height: 100%;
+  /* 原来是 5rem。缩到 4rem 是为了给上传腾位置 ——
+     第一行现在有三项，得挤进 15rem 里 */
+  width: 4rem;
+  min-width: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 0px; 
+  text-decoration: none;
+  color: inherit;
+}
+.nav-type{
+  height: 100%;
+  width: 4rem;
+  display: flex;
+  align-items: center;
+  padding: 0 0px;
+  position: relative;
+}
+.type{
+  height: 100%;
+  width: 4rem;
+  display: flex;
+  align-items: center;
+  padding: 0 0px;
+}
+.arrow{
+  display: inline-block;
+  transition: transform 0.5s;
+}
+/* 悬停整个「分类」区域时，箭头旋转 180 度 */
+.nav-type:hover .arrow {
+  transform: rotate(180deg);
+}
+.list{
+  position: absolute;
+  /* 原来是 top: 70%，那是照着「.nav-type 有 4rem 高」调的。
+     现在第一行只有 2rem，70% = 1.4rem，而「分类」两个字的墨迹下沿就在 1.44rem 左右
+     —— 白色面板会切到字上。改成 100%（贴着自己那行的底部），和行高无关，以后改高度也不会再撞 */
+  top: 100%;
+  left: 0;
+  /* 宽度对齐上传弹窗里的标签盒。
+     标签盒自己没写死宽度，是 flex:1 从弹窗算出来的（见 UploadModal.css 里
+     .upload-modal 的 width: 520px）：
+       (520px − 左右内边距 1.5rem×2 − 两栏之间的缝 0.75rem) ÷ 2
+     = 260px − 1.875rem。这里照抄同一份算式，弹窗那边改了宽度这里跟着变；
+     直接抄一个「230px」的话，两边迟早对不上。
+     ⚠ 原来是 width: max-content + min-width: 100%，删掉了：
+     max-content 的含义是「按不换行时最宽的那一行来定宽」，那样下面新加的
+     flex-wrap 永远等不到「放不下」的时刻，等于没写；
+     而且以后加一个「科幻冒险」这种长词，面板会越来越宽 */
+  width: calc(260px - 1.875rem);
+  /* 宽度写死、又有了四边内边距，必须写 border-box：
+     不加的话这个 16.7rem 是「内容宽度」，外框还要再加左右各 0.5rem，
+     实际比标签盒宽出 1rem */
+  box-sizing: border-box;
+  /* 原来是 padding: 8px 0（只有上下）。现在是「一个带边框的盒子」，
+     四边都要留，值和标签盒的 0.5rem 一样。
+
+     这里本来还有 margin: 0 和 list-style: none 两条 —— 是这一层还是 <ul> 时
+     写的（清掉 <ul> 的默认外边距和项目符号）。换成 <div> 之后两条都不起作用，
+     删了。⚠ 项目符号那条不是不用管了，是搬去了下面 .list-items，那里才是 <ul> */
+  padding: 0.5rem;
+  /* 竖向堆叠。⚠ 这一层的子项是「两个大类」那两个 .list-group，
+     不是那些胶囊 —— 换行（flex-wrap）和胶囊之间的缝都搬到下面
+     .list-items 去了，写在这里没有效果。
+     竖向堆叠顺手把「第二个大类从哪开始」交给了正常流：
+     它从第一个 .list-group 的实际高度之后开始，不需要在 CSS 里猜。
+     要猜的那个写法（两个大类各给一个 position: absolute + top: 100% / 200%）
+     为什么必然重叠，见 App.tsx 里那段。
+     0.75rem 比 .list-group 内部的 0.4rem 大是故意的：组间要比组内疏，
+     否则标题离下一组的胶囊和离自己那堆一样近，就看不出它属于哪一组 */
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 0.25rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+  z-index: 10;
+}
+/* 一个大类里那堆胶囊。两个大类共用这一个类 —— 它们的样式完全一样，
+   硬分成 .list-items-1 / -2 的话就成了两份要同步改的规则，
+   改漏一处就变成「一个对一个不对」；而且类名一换，下面
+   .nav-type:hover .list 和 .list li a 就全都匹配不上了，面板会一直
+   opacity: 0 / visibility: hidden —— 之前两个大类都不显示就是这个原因 */
+.list-items{
+  margin: 0;
+  /* <ul> 默认有大约 40px 的左内边距（给项目符号留的位置），不清掉
+     整排胶囊会整体往右偏这么多 */
+  padding: 0;
+  list-style: none;
+  /* 胶囊的排布方式：换行 + 两个之间的缝，和 .tag-list 那两条一样。
+     ⚠ <ul> 的子元素只允许 <li>，不能塞一个 <div> 进去当内层容器，
+     所以这两个属性直接写在 <ul> 上，让每个 <li> 自己当 flex 子项 */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  /* 这里故意不抄 .tag-list 里那句 align-content: flex-start ——
+     它是给「高度被拉长、多出来的行会被平分」的容器用的。
+     这个面板是绝对定位、高度由内容撑开，没有多余空间可分配，写了也没作用 */
+}
+/* 一个大类 = 一行标题 + 它自己那堆胶囊。
+   ⚠ 这一层不是多余的：标题不能直接放进 <ul> 里，<ul> 的子元素只允许 <li>，
+   所以得有个共同的外壳，让标题和 <ul> 当它的两个子项。
+   gap 0.4rem 是「组内」，比 .list 那边的 0.75rem「组间」小 —— 靠这个疏密差
+   把「哪几个胶囊属于哪一行标题」表达出来 */
+.list-group{
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+/* 「主题」「作者」这两个小标题。字号和颜色抄的是 UploadModal.css 里的
+   .tag-box-title —— 那边的取舍是「别当标题抢戏，它只是个栏目标签」，这里同理。
+   #666 是写死的，和这个面板里 .list li a 的 #333 一样：面板底色写死了 #fff，
+   跟着深色模式继承浅色文字反而看不清。
+   ⚠ text-align: left 不能省。#root 上有 text-align: center，而这个标题是
+   块级元素、占满一整行，不写就会被居中 —— 底下那排胶囊是左对齐的，标题飘在
+   中间看着像没对齐。（.tag-box-title 那边没写这句，因为它在弹窗里本来就是居中的）*/
+.list-group-title{
+  font-size: 0.9rem;
+  color: #666;
+  text-align: left;
+}
+.nav-type:hover .list{
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+/* 每一项做成和标签盒里 .tag-chip 一样的「小胶囊」。
+   下面这几个值和 UploadModal.css 里的 .upload-modal .tag-chip 是同一套 ——
+   那个类的作用域挂在 .upload-modal 上，导航栏这边够不着，只能抄一份。
+   改一处记得改两处（和三个弹窗外壳各留一份是同样的取舍）。
+   ⚠ 不用抄 .tag-chip 里的 font: inherit：那条是给 <button> 写的，
+   表单控件不继承字体；<a> 本来就继承，没这个问题 */
+.list li a{
+  /* 原来是 padding: 8px 16px + display: block 的整行条目，
+     现在是贴着文字的小胶囊 */
+  display: block;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 1rem;
+  background: #f7f7f7;
+  /* 这里保留写死的 #333（原来就是），没换成 .tag-chip 的 color: inherit ——
+     面板底色是写死的 #fff，而深色模式下页面文字是浅色，
+     继承过来的话就是浅色字压在白底上，看不清 */
+  color: #333;
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+.list li a:hover{
+  /* 原来是 #f5f5f5。胶囊底色已经是 #f7f7f7，两者差得太近、悬停看不出变化，
+     改成和 .tag-chip:hover 一样的 #eee */
+  background: #eee;
+}
+.rank{
+  height: 100%;
+  width: 4rem;
+  min-width: 15px;
+  display: flex;
+  align-items: center;
+  padding: 0 0px;
+  text-decoration: none;
+  color: inherit;
+}
+.search{
+  /* 第二行。2rem + 4rem = 6rem，正好等于 .header 的高度。
+     输入框高度 = 60% × 4rem = 2.4rem，和改成两行之前完全一样
+     （如果对半分各 3rem，输入框会掉到 1.8rem，反而比原来矮 25%） */
+  height: 4rem;
+  /* 宽度对齐上面那一行：首页 4rem + 缝 1.5rem + 分类 4rem + 缝 1.5rem + 上传 4rem = 15rem。
+     第一行占的就是这 15rem；这里也写 15rem，两行的左端和右端就都对齐了。
+     它是「宽度已定」，所以 .nav 的 align-items:stretch 对它无效，它会靠左站。
+     box-sizing:border-box 让 15rem 是外框宽度（含 padding）。
+     ⚠ 这个 15rem 和 .nav-links 的 15rem 是绑死的，改一个必须改另一个 */
+  width: 15rem;
+  min-width: 15px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  /* 输入框和按钮之间的缝 */
+  gap: 0.5rem;
+  /* 原来的 padding-right: 0.5rem 删掉了。它当时的作用是「别让搜索按钮贴到
+     右边的注册」；现在 .search 只占 13rem，它右边本来就空着一大段，用不着它了。
+     留着反而会让内容区缩成 12.5rem、输入框跟着少 0.5rem，
+     搜索框的可视右端就比上面那一行短 0.5rem —— 正好是这次要修掉的 */
+  text-decoration: none;
+  color: inherit;
+  /* 不写 flex:1：在 column 方向上 flex-basis 是 0%，会盖掉上面的 height
+     （width 是交叉轴，不受影响），高度就失控了 */
+  /* position: relative 也删了：按钮不再是绝对定位，没有需要它当包含块的子元素 */
+}
+.search-input{
+  height: 60%;
+  /* 原来是 width:100%、父元素再用 padding-right:40% 把按钮的位置让出来。
+     现在搜索独占一行，改成 flex:1 = 「按钮占完剩下的宽度都归我」 */
+  flex: 1;
+  /* flex 子项的 min-width 默认是 auto，含义是「不许压得比内容还窄」。
+     <input> 的固有宽度来自 size 属性（默认 20 字符，约 170px），
+     不改成 0 它就不肯缩，会把这一行撑破。
+     而 #root 上有 overflow-x:hidden，撑破了不会出滚动条，是直接被裁掉 */
+  min-width: 0;
+  /* 必须和「删掉父元素的 padding-right:40%」成对出现：
+     输入框默认是 content-box，左右各 10px 的 padding 会额外加上去，
+     不收进来就会溢出 20px */
+  box-sizing: border-box;
+  border: none;
+  padding: 0 10px;
+  /* 原来是 font-size:1rem。换成 font:inherit 是为了顺带修字体：
+     表单控件不继承字体，不给的话 placeholder 会用浏览器默认的 Arial，
+     和旁边的「首页」「排行」不是同一个字体（size 仍是 1rem，大小不变） */
+  font: inherit;
+}
+/* 焦点提示。上面原来有一行 outline: none，键盘 Tab 进来完全看不出焦点在哪
+   （鼠标点进来也一样，什么都不会变）。现在把那行删了，换成自己画的焦点环。
+   用 :focus 而不是 :focus-visible：对 <input> 这种可以打字的元素，两种写法
+   在现代浏览器里结果一样（点进来也算 focus-visible），写 :focus 更直观。
+   颜色用 var(--text-h)：浅色模式下近乎黑，深色模式自动变成近白，
+   两种模式都够显眼。outline 不占布局空间，不会把这一行挤变形 */
+.search-input:focus{
+  outline: 2px solid var(--text-h);
+  outline-offset: 1px;
+}
+.search-button{
+  height: 60%;
+  width: 4rem;
+  min-width: 15px;
+  /* 按钮从来没重置过浏览器默认的 border: 2px outset，也没有 box-sizing，
+     所以它的实际高度是 60% + 4px。以前它孤零零浮着看不出来，
+     现在紧挨着输入框，就会比输入框高 4px（窄屏下高 37%）。
+     加上 box-sizing:border-box 让 2px 边框算进 60% 里面，两个控件才一样高 */
+  box-sizing: border-box;
+  /* 别被挤扁：flex 子项默认 flex-shrink: 1，窄屏时会跟着一起缩 */
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0px;
+  text-decoration: none;
+  color: inherit;
+  /* 其他按钮（注册/登录/上传…）都有这行，这个漏了 */
+  cursor: pointer;
+  /* 原来的 position: absolute; right: 50% 删掉了。
+     绝对定位让它脱离文档流，输入框算宽度时完全不知道它存在，
+     窄屏下就会被它盖住。回到文档流后两个各占各的位置 */
+  /* 按钮不继承字体：浏览器 UA 样式表给它写死了 font: 400 13.3333px Arial，
+     不管根字号怎么变都卡在 13.33px，所以边框里的字不会跟着
+     :root{font-size: clamp(6px, 1.4vw, 14px)} 缩放，和旁边的「首页」「排行」对不齐。
+     和上面注册/登录/登出那几个按钮一个写法，交回给继承 */
+  font: inherit;
+}
+/* 注册/登录/上传/用户名/登出 这五个按钮：
+   原来是 height:100%，跟着 4rem 的 header 居中；现在 header 有 6rem 两行，
+   照旧写 100% 的话文字会居中在 3rem 处，正好卡在两行之间，和哪一行都对不齐。
+   改成 2rem + align-self:flex-start，和第一行（首页/分类/排行）对齐 ——
+   也就是保持它们和导航项原本的相对位置。
+   （想改成跟下面搜索行对齐，就写 height:4rem + align-self:flex-end） */
+.register{
+  height: 2rem;
+  align-self: flex-start;
+  min-width: 15px;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  padding-right: 1%;
+  color: inherit;
+  background: none;   /* 按钮默认有背景和边框，这里去掉，让它看起来像链接 */
+  border: none;
+  cursor: pointer;    /* 鼠标悬停变手型 */
+  font: inherit;      /* 按钮默认字体和页面不同，这里继承父元素字体 */
+}
+.login{
+  height: 2rem;
+  align-self: flex-start;
+  min-width: 15px;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  padding-left: 1%;
+  color: inherit;
+  background: none;   /* 按钮默认有背景和边框，这里去掉，让它看起来像链接 */
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}
+.user{
+  display: flex;      /* 登录后显示当前用户 */
+  height: 2rem;
+  align-self: flex-start;
+  min-width: 15px;
+  align-items: center;
+  padding: 0;
+  padding-left: 1%;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}
+.logout{
+  height: 2rem;
+  align-self: flex-start;
+  min-width: 15px;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  padding-left: 1%;
+  color: inherit;
+  background: none;   /* 和注册/登录一样，去掉按钮默认背景边框，看起来像链接 */
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}
+.upload{
+  height: 2rem;
+  /* 这里原来有 align-self: flex-start，是它还直接挂在 .nav 下面时写的
+     （.nav 是竖向 flex，那个值让它靠左站）。现在它在 .nav-links 里，
+     而 .nav-links 是横向 flex —— align-self 管的变成了竖轴，
+     flex-start 会把按钮顶到 2rem 行的上沿。删掉，用 .nav-links 的 align-items: center */
+  /* 和 .home / .nav-type 一样宽，三项各占 4rem */
+  width: 4rem;
+  min-width: 15px;
+  display: flex;
+  /* 原来是靠左（缺省）。宽度定死 4rem 之后，文字会贴着左边、右边空一截；
+     .home / .nav-type 里的字都是居中的，这个不居中就不齐 */
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  /* 原来这里还有 padding-right: 1%，注释说是「和右边的用户名拉开距离」——
+     那是给 .temp 里那个上传按钮写的（它挨着用户名）。这里右边没有邻居，
+     留着反而会把居中的文字往左推。注意 .temp 里那两个按钮也共用这个类，
+     所以它们将来显示出来时，右边那道 1% 的间隙也没了，要自己补 */
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+}

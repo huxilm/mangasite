@@ -1,0 +1,100 @@
+.reader{
+  background: #1a1a1a;       /* 深色背景，突出漫画页 */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;    /* 页面竖向堆叠 */
+  align-items: center;       /* 水平居中 */
+  gap: 0.5rem;
+  padding: 1rem 0;
+  box-sizing: border-box;
+}
+.reader-head{
+  color: #ccc;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  /* .reader 是 flex column + align-items:center，子项的宽度会收缩到内容宽度。
+     不写 100% 的话下面那排话按钮有多宽，这整块就只有多宽，
+     横向滚动永远也滚不起来（因为容器本身已经装得下它了） */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ===== 话的选择器 =====
+   一话一个按钮排成一行。话多了就横向滚动，不换行 ——
+   换行会让这一块高度不可预测，把下面的漫画页一路往下推 */
+.reader-chapters{
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+  /* 滚到底不要顺手把整页也滚下去 */
+  overscroll-behavior-x: contain;
+}
+.reader-chapter{
+  flex-shrink: 0;         /* 不许被挤扁，宁可滚 */
+  padding: 0.25rem 0.6rem;
+  border: 1px solid #444;
+  border-radius: 0.25rem;
+  background: #2a2a2a;
+  color: #ccc;
+  font: inherit;          /* 表单控件不继承字体，不写会用浏览器的默认 Arial */
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.reader-chapter:hover{ background: #3a3a3a; }
+/* 正在看的那一话。:hover 也写一遍：鼠标停在这一话上时，
+   不希望它看起来和「当前话」一模一样 */
+.reader-chapter.active,
+.reader-chapter.active:hover{
+  background: #4caf50;
+  border-color: #4caf50;
+  color: #fff;
+}
+
+/* ===== 上一话 / 当前话 / 下一话 ===== */
+.reader-nav{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.reader-now{
+  flex: 1;
+  min-width: 0;          /* flex 子项的 min-width 默认 auto，会被长标题撑破这一行 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reader-step{
+  flex-shrink: 0;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid #444;
+  border-radius: 0.25rem;
+  background: #2a2a2a;
+  color: #ccc;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.reader-step:hover:not(:disabled){ background: #3a3a3a; }
+.reader-step:disabled{
+  opacity: 0.4;
+  cursor: default;
+}
+/* 页面最底下那个「下一话」。一话几十页，看完滚到底还要再滚回顶部去点，
+   是阅读时最烦的一件事 */
+.reader-next{
+  margin: 1rem 0 2rem;
+  padding: 0.6rem 1.5rem;
+}
+.reader-link{
+  color: #4caf50;
+  font-size: 0.95rem;
+}
+.reader .page{
+  width: auto;
+  max-width: 100%;           /* 不超出屏幕宽度 */
+  display: block;
+}

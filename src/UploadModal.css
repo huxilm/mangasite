@@ -1,0 +1,283 @@
+/* ===== 弹窗外壳 =====
+   和 RegisterModal.css / LoginModal.css 里那份是一样的。
+   三个弹窗各留一份，改动时记得三处同步（要合并的话可以抽成公共的 Modal.css）。*/
+.modal-mask{
+  position: fixed;
+  inset: 0;          /* 铺满整个屏幕 */
+  z-index: 100;      /* 盖在页面其他内容之上 */
+  /* 透明遮罩：不显示背景，只负责「点击空白处关闭弹窗」 */
+}
+.modal{
+  position: absolute;   /* 相对遮罩层定位 */
+  top: 3rem;            /* header 高 6rem（两行），弹窗贴在它下方 */
+  right: 6%;            /* 靠右对齐 */
+  width: 150px;         /* 竖向矩形：宽度较窄 */
+  max-width: 92%;
+  background: #fff;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;  /* 竖向排列 → 矩形 */
+  gap: 0.75rem;
+}
+.modal input{
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 0.25rem;
+}
+.modal-submit{
+  padding: 0.5rem;
+  cursor: pointer;
+}
+.toast{
+  position: absolute;   /* 脱离文档流，不撑开弹窗 */
+  top: 100%;            /* 位于弹窗正下方 */
+  left: 25%;
+  right: 0;
+  margin-top: 0.5rem;   /* 与弹窗之间留点距离 */
+  width: fit-content;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  text-align: center;
+  font-size: 0.9rem;
+  animation: toast-life 1.5s ease forwards;   /* 淡入 → 保持 → 淡出 */
+}
+.toast.success{ background: #4caf50; }   /* 成功：绿色 */
+.toast.warning{ background: #ff9800; }   /* 警告：橙色 */
+@keyframes toast-life{
+  0%   { opacity: 0; transform: translateY(-8px); }
+  15%  { opacity: 1; transform: translateY(0); }
+  75%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-8px); }
+}
+
+/* ===== 上传弹窗自己的样式 =====
+   用 .upload-modal 而不是改 .modal：类选择器写两个，优先级更高，
+   能稳稳盖住上面的 .modal{width:150px}，又不会影响注册/登录弹窗。*/
+.upload-modal{
+  /* 原来是 260px（那张宽度只放得下输入框和封面预览）。现在里面是左右两栏，
+     两栏在 520px 里平分：520 − 左右内边距 48 − 间隙 12 = 460，一栏 230px。
+     改这个数两栏会一起变 —— 它们的宽度都是 flex:1 算出来的，没有写死的值 */
+  width: 520px;
+  /* 内容比屏幕还高时不能任由弹窗往下长 —— 会冲出屏幕，提交按钮就点不到了。
+     上面 top:6rem（header 高 6rem）、下面留 1rem，所以是 7rem。
+     只改上面的 top 不改这里的话，弹窗会被允许比视口高 2rem，内容一多
+     提交按钮就又被顶出屏幕 —— 正是这段要防的事。
+     （toast 已经挪到弹窗正中间，不再需要为它在下面预留位置）
+     写两遍是渐进增强：不认 dvh 的浏览器会忽略第二行，用上面那行 vh */
+  max-height: calc(100vh - 7rem);
+  max-height: calc(100dvh - 7rem);
+}
+/* toast 浮在弹窗正中。
+   这里用 inset:0 + margin:auto 居中，而不是常见的 top:50% + transform:
+   因为下面的 toast-life 动画整个是靠 transform 做上下位移的 ——
+   base 里再写一个 transform 会被动画整个覆盖掉，一动就跳位。
+   四个方向的 auto 外边距会平分剩余空间，效果一样，还省下一个 transform 名额 */
+.upload-modal .toast{
+  inset: 0;                 /* 盖掉 .toast 原来的 top:100% / left:25% / right:0 */
+  margin: auto;             /* 上下左右平分剩余空间 → 水平垂直都居中 */
+  width: fit-content;
+  height: fit-content;      /* 高度必须是确定值，否则会撑满整个弹窗 */
+  box-sizing: border-box;   /* 让 fit-content 把 padding 算进去，不顶破弹窗 */
+}
+/* 左右两栏的容器。左栏是输入框那列，右栏是标签盒。
+   它是 .upload-modal（竖向 flex）的子项，本身又是横向 flex */
+.upload-body{
+  display: flex;
+  gap: 0.75rem;
+  /* flex 子项的 min-height 默认是 auto = 「不许压得比内容还矮」。
+     这里不改成 0，这个盒子就顶到内容的高度压不下去，
+     连带下面两栏都拿不到一个确定的高度，滚动条永远出不来 */
+  min-height: 0;
+  /* 故意不写 flex: 1。弹窗高度是 auto + max-height，内容不满时没有剩余空间
+     可以分，flex-grow 是空转；内容超高时靠的是 flex-shrink，默认就有。
+     写了 flex:1 反而会把 flex-basis 变成 0，在 auto 高度的容器里可能整个塌掉 */
+}
+/* 中间那段（输入框们）自己滚，标题栏和提交按钮固定在上下两端。
+   注意 overflow 不能直接加在 .upload-modal 上：.toast 是 absolute + top:100%
+   挂在弹窗正下方的，而它的包含块正是 .upload-modal —— 弹窗一有 overflow
+   （一个轴不是 visible 时另一个轴也会被算成 auto）toast 会被整条裁掉、看不见 */
+.upload-modal .upload-scroll{
+  overflow-y: auto;
+  /* 左栏拿到的是「父容器宽度 − 标签盒 − 间隙」。横向 flex 里 flex:1 是安全的：
+     父容器宽度是确定的（.upload-modal 写死了 520px），所以 flex-basis:0
+     之后剩余空间是多少、谁拿多少，算得出来 */
+  flex: 1;
+  /* 横轴上的 min-height:0 —— 横向 flex 子项的 min-width 默认也是 auto，
+     也就是「不许压得比内容还窄」。输入框的固有宽度不小，不改成 0
+     它就不肯让位给右边的标签盒，两栏会一起溢出弹窗 */
+  min-width: 0;
+  /* 竖轴上的那一份：min-height 默认 auto 会顶到内容高度，滚动条出不来 */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;               /* 接手原来 .modal 的 gap，里面的间距保持不变 */
+  overscroll-behavior: contain; /* 滚到底不要连带把后面的页面也滚了 */
+}
+/* 右栏：标签盒。和左栏平分宽度 —— 原来这里是 width: 11rem + flex-shrink: 0（定宽），
+   现在改成 flex: 1，两栏各拿 230px。
+   横向 flex 里用 flex:1 是安全的，理由和 .upload-scroll 那段一样：
+   父容器 .upload-modal 的宽度写死了，剩余空间算得出来。
+   顺带注意 .upload-body 的 gap 是 12px，所以两栏加起来是 460px 而不是 472px */
+.upload-modal .tag-box{
+  flex: 1;
+  /* 和左栏同理：横向 flex 子项的 min-width 默认是 auto，不改 0 的话
+     它会被最宽的那个标签撑开，两栏就不等宽了 */
+  min-width: 0;
+  box-sizing: border-box;
+  /* 标签多了自己滚，而不是把弹窗撑高。和左栏一样需要 min-height: 0 */
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 0.25rem;
+  padding: 0.5rem;
+}
+.upload-modal .tag-box-title{
+  /* 别当标题抢戏，它只是个栏目标签 */
+  font-size: 0.9rem;
+  color: #666;
+}
+.upload-modal .tag-list{
+  display: flex;
+  flex-wrap: wrap;            /* 一行放不下就换行，不做横向滚动 */
+  gap: 0.4rem;
+  /* 换行后多出来的行默认会被拉伸到平分高度，align-content 把它压回顶部 */
+  align-content: flex-start;
+}
+.upload-modal .tag-chip{
+  /* 做成「小胶囊」，和输入框那种方角控件在视觉上分开 ——
+     一眼能看出这是可点的候选，不是要填的字段 */
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 1rem;
+  background: #f7f7f7;
+  cursor: pointer;
+  font: inherit;              /* 表单控件不继承字体，不给的话是浏览器默认的 Arial */
+  font-size: 0.85rem;
+  color: inherit;
+}
+.upload-modal .tag-chip:hover{
+  background: #eee;
+}
+/* 已选中：换成主题色（紫），一眼看出哪些点过了。
+   ⚠ 必须写成「.tag-chip-on 和 .tag-chip-on:hover 两条同一个规则」，
+   不能只写一条 .tag-chip-on —— 优先级里伪类也算一个类，
+   `.upload-modal .tag-chip:hover` 是三个类，比 `.upload-modal .tag-chip-on`
+   的两个类高，写在它后面也没用。结果就是鼠标一划过去，选中的胶囊
+   被打回上面的 #eee，看着像没选。把 :hover 那份也写上（同样三个类、
+   又排在 .tag-chip:hover 后面）才盖得住。
+   颜色用 var(--accent*) 而不是写死的紫：index.css 里深色模式另定义了一套，
+   跟着主题走，不用为深色模式再写一遍 */
+.upload-modal .tag-chip-on,
+.upload-modal .tag-chip-on:hover{
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+.upload-modal .upload-title{
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.upload-modal .upload-type{
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  box-sizing: border-box;
+  padding: 0.25rem 1rem;
+}
+.upload-modal .modal-btn{
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  width: 40%;
+}
+.upload-modal .upload-label{
+  font-size: 0.85rem;
+  color: #666;
+}
+.upload-modal .upload-preview{
+  width: 100%;
+ /* aspect-ratio: 3 / 4;       /* 和详情页封面一致的竖版 3:4 */
+  object-fit: cover;
+  border-radius: 0.4rem;
+  background: #eee;          /* 图片还没读出来时的占位底色 */
+  display: block;
+}
+/* 上传中按钮变灰，提示「已经点过了，别再点」 */
+.upload-modal .modal-submit:disabled{
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ===== 选中文件夹之后的摘要 =====
+   多种「被丢掉的东西」都写在这一行里，靠左排、字号小一点，
+   免得和旁边那些真正的输入框抢注意力。
+   #root 上有 text-align:center，居中读一长串分号句很难受 */
+.upload-modal .upload-summary{
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: #666;
+  text-align: left;
+  background: #f5f5f5;
+  border-radius: 0.25rem;
+  padding: 0.4rem 0.5rem;
+}
+
+/* ===== 需要用户先做决定的横幅（上次没传完 / 标题撞车） =====
+   和 .upload-summary 一样是「说明 + 两个按钮」，但它是待办，颜色要更醒目 */
+.upload-modal .upload-banner{
+  font-size: 0.8rem;
+  line-height: 1.4;
+  text-align: left;
+  color: #7a4b00;
+  background: #fff4e5;
+  border: 1px solid #ffd8a8;
+  border-radius: 0.25rem;
+  padding: 0.5rem;
+}
+.upload-modal .upload-banner-actions{
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+/* 覆盖 .modal-btn 的 width:40%。那两个按钮是按「新本/续本」各占四成、
+   刚好铺满一行写的；这里是两个小按钮靠左站着，宽度按文字来 */
+.upload-modal .upload-banner-actions .modal-btn{
+  width: auto;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.8rem;
+  background: #fff;
+  border: 1px solid #ffd8a8;
+}
+
+/* ===== 上传进度 ===== */
+.upload-modal .upload-progress{
+  font-size: 0.8rem;
+  color: #666;
+  text-align: left;
+}
+.upload-modal .upload-progress-bar{
+  height: 0.35rem;
+  margin-top: 0.25rem;
+  border-radius: 999px;
+  background: #eee;
+  overflow: hidden;   /* 让里面那条的圆角跟着外框一起被裁出来 */
+}
+.upload-modal .upload-progress-fill{
+  height: 100%;
+  background: #4caf50;
+  border-radius: 999px;
+  /* 宽度是 JS 按百分比算的，这里加个过渡，进度走得连贯一点。
+     只过渡 width：加 transition:all 会连颜色变化一起拖慢 */
+  transition: width 0.15s linear;
+}

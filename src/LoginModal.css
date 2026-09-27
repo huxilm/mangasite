@@ -1,0 +1,53 @@
+.modal-mask{
+  position: fixed;
+  inset: 0;          /* 铺满整个屏幕 */
+  z-index: 100;      /* 盖在页面其他内容之上 */
+  /* 透明遮罩：不显示背景，只负责「点击空白处关闭弹窗」 */
+}
+.modal{
+  position: absolute;   /* 相对遮罩层定位 */
+  top: 6rem;            /* header 高 6rem（两行），弹窗贴在它下方 */
+  right: 6%;            /* 靠右对齐 */
+  width: 150px;         /* 竖向矩形：宽度较窄 */
+  max-width: 92%;
+  background: #fff;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;  /* 竖向排列 → 矩形 */
+  gap: 0.75rem;
+}
+.modal input{
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 0.25rem;
+}
+.modal-submit{
+  padding: 0.5rem;
+  cursor: pointer;
+}
+.toast{
+  position: absolute;   /* 脱离文档流，不撑开弹窗 */
+  top: 100%;            /* 位于弹窗正下方 */
+  left: 25%;
+  right: 0;
+  margin-top: 0.5rem;   /* 与弹窗之间留点距离 */
+  width: fit-content;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  text-align: center;
+  font-size: 0.9rem;
+  animation: toast-life 1.5s ease forwards;   /* 淡入 → 保持 → 淡出 */
+}
+.toast.success{ background: #4caf50; }   /* 成功：绿色 */
+.toast.warning{ background: #ff9800; }   /* 警告：橙色 */
+@keyframes toast-life{
+  0%   { opacity: 0; transform: translateY(-8px); }
+  15%  { opacity: 1; transform: translateY(0); }
+  75%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-8px); }
+}

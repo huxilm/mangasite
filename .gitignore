@@ -1,0 +1,36 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# 上传的漫画图片。这是几百 MB 的二进制，而且重新上传就能再生出来。
+# 不忽略的话下次 git add . 会把整本漫画提交进仓库
+server/uploads/
+
+# 环境变量文件：数据库密码和 JWT 签名密钥都从环境变量读，值写在这里。
+# 绝不提交 —— 拿到 JWT 密钥的人不需要知道任何密码，自己签一个 token
+# 就能冒充任意用户（服务端只验签名，不看是谁签的）。
+# ⚠ 而且「提交完再删掉」没用：旧提交对象里那份原封不动，
+# git show <旧提交>:server/index.js 照样能读出来。这条规则必须一直生效
+.env
+.env.*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

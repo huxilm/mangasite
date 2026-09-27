@@ -1,0 +1,133 @@
+.manga-overview{
+  display: flex;             /* 左右布局：封面在左，详情在右 */
+  gap: 2rem;
+  padding: 2rem 6%;
+  box-sizing: border-box;
+  align-items: flex-start;
+  min-height: 100vh;
+}
+.manga-cover-container{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.manga-cover{
+  width: 200px;
+  aspect-ratio: 3 / 4;       /* 封面竖版 3:4 */
+  object-fit: cover;
+  border-radius: 0.5rem;
+  flex-shrink: 0;            /* 固定宽度，不被右侧内容挤压 */
+  background: #eee;          /* 封面没加载出来时的占位底色 */
+}
+.manga-details{
+  display: flex;
+  flex-direction: column;    /* 右侧内容竖向排列 */
+  gap: 0.75rem;
+}
+.manga-title{
+  margin: 0;
+  font-size: 1.8rem;
+}
+.manga-author{
+  color: #666;
+  font-size: 1rem;
+}
+.manga-stats{
+  display: none;             /* 点阅和爱心并排，同一行 */
+  gap: 1.5rem;
+  color: #444;
+}
+.icon-btn{           /* 点赞、收藏共用的「文字样式」按钮 */
+  background: none;   /* 去掉按钮默认背景 */
+  border: none;       /* 去掉按钮默认边框 */
+  padding: 0;
+  font: inherit;      /* 继承父元素字体，和「点阅」一致 */
+  color: inherit;     /* 继承 .manga-stats 的 #444 */
+  cursor: pointer;    /* 悬停变手型，提示可点 */
+}
+.manga-tags{
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;           /* 标签太多时自动换行 */
+}
+.manga-tags .tag{
+  padding: 0.25rem 0.6rem;
+  background: #eee;
+  border-radius: 1rem;
+  font-size: 0.85rem;
+}
+.read-btn{
+  margin-top: 0.5rem;
+  padding: 0.6rem 1.5rem;
+  background: #ff6b35;      /* 醒目的主色 */
+  color: #fff;
+  text-decoration: none;    /* 去掉链接下划线 */
+  border: none;
+  border-radius: 0.4rem;
+  font-size: 1rem;
+  cursor: pointer;
+  align-self: flex-start;   /* 只占内容宽度，不撑满整行 */
+}
+/* 删除按钮：其余全部沿用 .read-btn，只把背景换成红色。
+   ⚠ 选择器必须两个类连写，不能只写 .delete-btn ——
+   .read-btn 和 .delete-btn 都是 0,1,0 的特异度，那样就只能靠
+   「谁写在后面」来分胜负；以后谁调一下两条规则的先后顺序，
+   红色会静默变回橙色，而且很难看出是为什么。
+   两个类连写是 0,2,0，怎么排都稳。
+   ⚠ 也别改成 !important：那会把这条路彻底堵死，
+   以后想再正常覆盖它一次（比如禁用态）就只能跟着加 !important */
+.read-btn.delete-btn{
+  background: #d32f2f;      /* 比纯红暗一档。纯 #f00 在白底上太跳，
+                               而且和 .read-btn 的主色 #ff6b35 明度太近，
+                               两个按钮上下并排，红色得沉下去才分得出主次 */
+}
+/* 「编辑标签」按钮。
+   故意不套 .read-btn：那套是页面主操作的样式（橙底白字、大内边距、
+   0.6rem 1.5rem），这个按钮是标签行里的附属操作，长得和标签胶囊一个量级
+   才不抢眼 —— 所以尺寸直接照抄 .manga-tags .tag 那一档 */
+.edit-tags-btn{
+  padding: 0.25rem 0.6rem;      /* 和 .tag 一样 */
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 1rem;          /* 胶囊形，和标签一致 */
+  color: #666;
+  font: inherit;                /* ⚠ 按钮不继承字体，不写会变成系统默认字体 */
+  font-size: 0.85rem;           /* 和 .tag 一样（这行必须在 font: inherit 之后） */
+  cursor: pointer;
+}
+.tags-input{
+  /* 占满这一行剩下的宽度，窄到 16rem 以下就整体换行到下一行开头。
+     ⚠ min-width: 0 不能省 —— flex 子项的 min-width 默认是 auto，
+     内容是长串 JSON 时它会撑着不收窄，把整行挤到容器外面溢出 */
+  flex: 1 1 16rem;
+  min-width: 0;
+  /* 照 .modal input 那一档（UploadModal.css:24）：同样是文本输入框，
+     两处长得一样才不奇怪。box-sizing 得自己写 —— index.css 只给 #root
+     设了它，没有全局的 *{box-sizing:border-box}，
+     不写的话 padding 和 border 会额外加在 16rem 之上 */
+  box-sizing: border-box;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid #ddd;
+  border-radius: 0.25rem;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  /* ⚠ 这里和 .modal input 一样是写死的浅色，深色模式下会偏亮。
+     要一起改就两处一起改成 var(--bg)/var(--border)，
+     只改这一处会让两个输入框长得不一样 */
+}
+/* 「确定」按钮。尺寸和 .edit-tags-btn 完全一样（就看得出是同一排的东西），
+   但做成**实心**的：那一排里「编辑标签」是附属操作，这个是**提交**——
+   实心 = 主操作，和旁边的空心胶囊一眼分得开，不用读字。
+   颜色用 .read-btn 那个主色，页面里「按下去会发生事情」的按钮都长这样 */
+.tags-save-btn{
+  padding: 0.25rem 0.6rem;
+  background: #ff6b35;
+  border: 1px solid #ff6b35;
+  border-radius: 1rem;
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;     /* 必须在 font: inherit 之后 */
+  cursor: pointer;
+  white-space: nowrap;    /* 「确定」就俩字，但别让它跟着行宽被压成两行 */
+}

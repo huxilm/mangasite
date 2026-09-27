@@ -1,0 +1,164 @@
+.user-info-page{
+  display: flex;
+  gap: 2rem;
+  padding: 2rem 6%;
+  min-height: 100vh;
+  box-sizing: border-box;
+  align-items: flex-start;   /* 两列都从顶部开始，不被拉高 */
+}
+
+/* ===== 左列：个人信息 + 系列 ===== */
+.user-left{
+  width: 260px;
+  flex-shrink: 0;            /* 固定宽度，不被右侧挤压 */
+  display: flex;
+  flex-direction: column;    /* 系列盒子接在个人信息下方 */
+  gap: 1.5rem;
+}
+.user-info{
+  text-align: left;          /* 明确左对齐，内容多宽就多宽，贴左 */
+}
+.user-info p{
+  color: #555;
+  margin: 0.5rem 0;
+}
+
+/* ===== 右列：我的收藏，占满剩余宽度 ===== */
+.favorites-box{
+  flex: 1;                   /* 吃掉右侧所有剩余空间 */
+  min-width: 0;              /* 防止 grid 内容把 flex 子项撑破 */
+}
+
+/* ===== 盒子通用样式 ===== */
+.side-box{
+  border: 1px solid #e5e5e5;
+  border-radius: 0.5rem;
+  padding: 1rem 1.2rem;
+  /* 背景透明，和页面背景一致 */
+}
+.side-box h2{
+  font-size: 1.05rem;
+  margin: 0 0 0.8rem;        /* 上、左贴边，只留底部间距 */
+}
+.side-box .empty{
+  color: #999;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* ===== 系列列表（左列盒子里） ===== */
+.series-list{
+  list-style: none;          /* 去掉 li 的小圆点 */
+  padding: 0;
+  margin: 0 0 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.series-list li{
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.series-name{
+  flex: 1;                   /* 占满整行，只留右边两个小按钮的位置 */
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;   /* 名字在左，数量在右 */
+  gap: 0.5rem;
+  background: none;          /* 和 .icon-btn 一样，去掉按钮默认样式 */
+  border: none;
+  border-radius: 0.3rem;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: #333;
+  text-align: left;
+  cursor: pointer;
+}
+.series-name:hover{
+  background: #f2f2f2;
+}
+.series-name.active{         /* 当前正在筛选的系列 */
+  background: #ffefe7;
+  color: #e0591c;
+}
+.series-count{
+  color: #999;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+.series-name.active .series-count{
+  color: #e0591c;
+}
+.series-btn{
+  background: none;
+  border: none;
+  border-radius: 0.3rem;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.8rem;
+  color: #aaa;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.series-btn:hover{
+  background: #f2f2f2;
+  color: #333;
+}
+.series-new{
+  display: flex;
+  gap: 0.4rem;
+}
+.series-new .series-input{
+  flex: 1;
+}
+.series-input{
+  border: 1px solid #ddd;
+  border-radius: 0.3rem;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  min-width: 0;              /* 允许被压缩，不然会把整行撑破 */
+}
+
+/* ===== 收藏网格 ===== */
+.favorites-grid{
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);   /* 6 等分，每行正好 6 个 */
+  gap: 1.2rem;
+  max-width: 900px;                        /* 限制总宽，封面才不会被拉得过大 */
+}
+.favorite-item{
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.favorite-item a{
+  display: block;            /* 图片外面那层链接不要留行内元素的多余空隙 */
+}
+.favorite-cover{
+  width: 100%;
+  aspect-ratio: 3 / 4;       /* 竖版封面，3:4 */
+  object-fit: cover;
+  border-radius: 0.4rem;
+  background: #eee;          /* 封面没加载出来时的占位底色 */
+  display: block;
+}
+.favorite-title{
+  font-size: 0.85rem;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;       /* 标题过长时用省略号截断，不换行 */
+}
+.favorite-series{            /* 每张卡片下面的「归到哪个系列」下拉框 */
+  width: 100%;
+  border: 1px solid #ddd;
+  border-radius: 0.3rem;
+  padding: 0.15rem 0.2rem;
+  font-size: 0.75rem;
+  color: #555;
+  background: #fff;
+  cursor: pointer;
+}

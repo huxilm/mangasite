@@ -1,0 +1,111 @@
+.content {
+  width: 100%;
+  min-width: 200px;
+  padding-left: 6%;
+  padding-right: 6%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  /* 跟全站底色走。不能写死 #fff：:root 里 --bg 在深色模式下会被
+     覆盖成 #16171d，写死了深色模式下这块会是一块刺眼的白 */
+  background-color: var(--bg);
+}
+
+.most-read {
+  width: 100%;
+  margin-bottom: 1rem;
+  display: none;
+}
+
+.most-liked {
+  width: 100%;
+  margin-bottom: 1rem;
+  display: none;
+}
+
+.title {
+  width: 100%;
+  height: 2rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-align: left;
+  display: block;
+}
+
+.item-list {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 1rem;
+}
+
+.mostread-item {
+  font-size: 1.1rem;
+  font-weight: 500;
+  text-align: left;
+  color: #000000;
+  text-decoration: none;
+}
+
+.mostread-item .cover img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 0.25rem;
+  display: block;
+}
+
+.mostliked-item {
+  font-size: 1.1rem;
+  font-weight: 500;
+  text-align: left;
+  color: #000000;
+  text-decoration: none;
+}
+
+.mostliked-item .cover img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 0.25rem;
+  display: block;
+}
+
+/* ===== 按标签筛选的结果（导航栏「分类」下拉点进来的） =====
+   这里故意**不写** display —— <div> 缺省就是 block，不写才看得见。
+   上面 .most-read / .most-liked 要放出来，是去掉它们自己的 display: none，
+   不是往这里补一条 —— 补在这里对那两块没有任何作用 */
+.tag-result {
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+/* 卡片。和 .mostread-item / .mostliked-item 是同一套值，抄一份而不是借它们的
+   类名 —— 那两块的取舍是「保持原样别再动」，借了类名就把两边绑在一起了。
+   ⚠ 只有 color 是故意不同的：那两个写死了 #000000，因为它们 display:none 着、
+   从来没被人看见过；而这一块是首页上唯一可见的内容，深色模式下 #000000 压在
+   #16171d 的底上是一个字都看不见的。
+   inherit 会一直继承到 :root 的 color: var(--text)（index.css:23），
+   浅色 #6b6375 / 深色 #9ca3af，两种模式自动切换 */
+.tagresult-item {
+  font-size: 1.1rem;
+  font-weight: 500;
+  text-align: left;
+  color: inherit;
+  text-decoration: none;
+}
+.tagresult-item .cover img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 0.25rem;
+  display: block;
+}
+
+/* 「加载中…」和「没有找到带「X」标签的漫画」这两句提示。
+   用 --text 而不是 --text-h：它是说明文字、不是标题，浅一点才不抢戏 */
+.tag-empty {
+  color: var(--text);
+  font-size: 1rem;
+}
