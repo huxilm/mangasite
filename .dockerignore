@@ -1,0 +1,31 @@
+# 构建上下文里不该发给 docker daemon 的东西。
+#
+# ⚠ 这个文件的作用不只是「让镜像小一点」—— 构建上下文是**整个目录**打包
+# 发给 daemon 的。server/uploads 里是几百 MB 的漫画图，没有这条的话
+# 你每敲一次 docker build 都要把它整个传一遍，绝大多数还白传（见下面那条）
+
+node_modules
+**/node_modules
+dist
+dist-ssr
+.git
+.gitignore
+.vscode
+.idea
+*.md
+
+# 上传的漫画图片。
+# ⚠ 跑容器时这个目录要挂卷（docker run 的 -v），挂上去之后镜像里那份
+# 就被盖住了 —— 所以烤进来不只是浪费，还会让人误以为「镜像里自带图片」。
+# 镜像里那份永远是空的（而且是一次性构建出来的快照，和真实数据无关）
+server/uploads
+
+# 密钥。⚠ 这条是护栏，不是当前必需 ——
+# Dockerfile 里是一个一个具名 COPY 的（server/package.json、server/index.js），
+# 本来就带不进 .env。但哪天有人图省事改成 COPY server ./，没有这条就会把
+# DB_PASSWORD 和 JWT_SECRET 一起烤进镜像层。而镜像层删不掉：
+# docker history 里还在，「删掉重建镜像」也没用
+#
+# 每条都写两种形式：dockerignore 的 * 不跨 /，光写 .env 只挡得住根目录那个
+.env
+**/.env

@@ -1,0 +1,153 @@
+# 三个容器：db（MySQL）+ backend（Express）+ web（nginx）。
+#
+#   docker compose up -d            起
+#   docker compose up -d --build    强制重新构建镜像再起
+#   docker compose logs -f          看日志
+#   docker compose ps               看状态
+#   docker compose down             停（MySQL 数据留在卷里，不丢）
+#   docker compose down -v          停**并且删掉整个数据库**，只在想清库重来时用
+#
+# ⚠ 没有 version: 这一行。Compose V2 已经不需要它，写了会打一句 obsolete 警告。
+# ⚠ 也没有 networks: 段。compose 自动给这个项目建一张默认网络，三个服务都接上去，
+#   服务名（db / backend / web）就是这张网里的 DNS 名字。
+
+services:
+  # ---------- 数据库 ----------
+  db:
+    # 钉 8.0 而不是 8 或 latest：latest 会随官方发版漂到 8.4 / 9.x，
+    # 哪天 up 一下数据目录的格式就可能对不上
+    image: mysql:8.0
+
+    # 这个文件里必须有两个键（值你自己填，键名说明见 server/.env.example）：
+    #   MYSQL_ROOT_PASSWORD   root 的密码，只管运维
+    #   MYSQL_PASSWORD        后端那个账号的密码
+    # ⚠ MYSQL_PASSWORD 必须和同一个文件里的 DB_PASSWORD **一模一样**：
+    #   MySQL 拿 MYSQL_PASSWORD 建账号，后端拿 DB_PASSWORD 去登录，
+    #   写歪了后端报 ER_ACCESS_DENIED_ERROR (1045) —— 看着像账号没建，
+    #   其实是两个键的值不一致，很难查
+    env_file:
+      - server/.env
+
+    environment:
+      # 这两个不是秘密，直接写在这儿，省得往 .env 里塞。
+      # MYSQL_DATABASE：库不存在就建一个空的（建表靠下面挂的 schema.sql）
+      # MYSQL_USER：顺手建出一个 'mangasite'@'%' 的账号，并对上面那个库
+      #            授全部权限 —— 正好是之前让你手敲的那条 CREATE USER
+      # ⚠ MYSQL_USER 不能填 root，填了镜像会直接拒绝启动
+      MYSQL_DATABASE: mangasite
+      MYSQL_USER: mangasite
+
+    volumes:
+      # ⚠ 这一条就是「为什么数据库必须挂卷」。
+      #   mysql 的数据文件写在 /var/lib/mysql。不挂的话它在容器的可写层里，
+      #   容器一删（docker compose down、改配置重建、换镜像重建）就跟着没了。
+      #   挂成 named volume 之后：down 保留，只有 down -v 才删。
+      #   卷的真实名字是 <项目名>_<卷名>，即 mangasite_mysql-data，
+      #   docker volume ls 能看到
+      - mysql-data:/var/lib/mysql
+
+      # 初始化脚本。官方 mysql 镜像第一次启动时会把 /docker-entrypoint-initdb.d/
+      # 里的 .sql 按文件名字母序跑一遍。
+      # ⚠ 只在**数据目录为空**时跑，也就是这个卷第一次被创建的那一次。
+      #   之后你改了 server/schema.sql 再 up，它一个字都不会执行 ——
+      #   要生效只能手动进去 mysql < schema.sql，或者 down -v 清库重来。
+      # schema.sql 开头就是 CREATE DATABASE IF NOT EXISTS + USE mangasite
+      # （12-16 行），自包含，挂进去直接能跑
+      - ./server/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+
+    # 决定「db 是不是真的就绪了」。下面 backend 的 depends_on 靠它 ——
+    # 没有它，depends_on 只保证容器已启动，而 mysql 首次初始化要几十秒。
+    # ⚠ test 用 CMD-SHELL 而不是 CMD：CMD 是 exec 形式，不经过 shell，
+    #   里面的 $MYSQL_ROOT_PASSWORD 不会展开。compose 里 $$ 转义成一个字面 $，
+    #   再交给容器里的 /bin/sh 展开。
+    # ⚠ 代价：这个密码会出现在 docker inspect 的输出里
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      # 第一次要建库、建表、跑完 schema.sql，慢；这段时间内的失败不算数
+      start_period: 30s
+
+    # ⚠ 不往外开端口。只有 backend 需要连它，走 compose 内网就够。
+    #   想用本机 GUI 工具连的话加一行 "127.0.0.1:3307:3306" —— 前面那个
+    #   127.0.0.1 千万别省：省了就是 0.0.0.0，等于把数据库开到公网上
+    restart: unless-stopped
+
+  # ---------- 后端 ----------
+  # 服务名**必须**叫 backend：前端那份 nginx.conf 里写的是
+  #   proxy_pass http://backend:3000
+  # 靠 Docker 内置 DNS 解析，改成别的名字，nginx 启动时会报
+  # host not found in upstream "backend" 然后退出。
+  # （所以这里不用写 container_name —— 服务名本身就是网络里的主机名）
+  backend:
+    # build + image 同时给：镜像已经存在就直接用，不存在、或者敲了 --build
+    # 才走 build。这样平时 up 很快，改了代码想重建也有现成的路径
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    image: mangasite-server
+
+    # JWT_SECRET 和 DB_PASSWORD 在这里读进容器。
+    # ⚠ 这里是「运行时读」，不是「构建时烤」—— server/.env 既被 .gitignore
+    #   挡着，也被 .dockerignore 挡着，镜像里没有它
+    env_file:
+      - server/.env
+
+    environment:
+      # ⚠ DB_HOST 必须写在 environment 里，不能写进 .env。
+      #   理由见 server/.env.example：本机 npm run dev 要 localhost，
+      #   容器里要 db —— 写进 .env 必然弄坏其中一边。
+      #   environment 的优先级高于 env_file，所以 .env 里就算写了也会被这行盖掉。
+      # db 是上面那个服务的名字，靠 compose 默认网络里的 DNS 解析
+      DB_HOST: db
+      # 对上 db 服务里 MYSQL_USER 建出来的那个账号。
+      # ⚠ 不写的话 DB_USER 默认是 root，连不上 —— mysql 镜像默认只建
+      #   'root'@'localhost'，容器过来的源 IP 是网桥地址，会被拒
+      DB_USER: mangasite
+      DB_NAME: mangasite
+
+    volumes:
+      # ⚠ 同样是为了数据不丢：index.js 往这个目录写上传的图和封面。
+      #   写进容器的话 down 一删全没。
+      #   挂出来之后图落在你原来的 server/uploads 里 —— 本机开发上传的图
+      #   容器里看得见，容器里上传的本机也看得见，两边共用同一份文件。
+      # ./ 开头是相对这份 compose 文件所在的目录（仓库根目录）
+      - ./server/uploads:/app/uploads
+
+    depends_on:
+      db:
+        # ⚠ 用这个长写法而不是简写的 depends_on: [db]。
+        #   简写只等「容器启动了」，而 mysql 首次初始化要几十秒 ——
+        #   不等健康就绪的话，后端起来后的头几个请求会 500
+        condition: service_healthy
+
+    # ⚠ 不开 ports。后端不需要浏览器直接访问，所有请求都是相对路径 /api/...
+    #   由 web 那个 nginx 转进来。往外开端口只是多一个口子
+    restart: unless-stopped
+
+  # ---------- 前端 ----------
+  # nginx 发 dist 里的静态文件，并把 /api/ 、/uploads/ 转给 backend
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mangasite-web
+
+    ports:
+      # 宿主机 8080 → 容器 80。左边随便挑一个没被占的；
+      # 右边 80 不能改，nginx.conf 里写死的是 listen 80
+      - "8080:80"
+
+    depends_on:
+      # 这里用简写就够：nginx 要的只是 backend 这个名字能解析出来，
+      # 并不需要后端已经在监听。真正需要「等就绪」的是上面 backend 等 db
+      - backend
+
+    restart: unless-stopped
+
+volumes:
+  # 声明上面 db 用的那个 named volume。
+  # ⚠ 只有声明过的卷才能被服务引用；不写这一段 compose 会报
+  #   service "db" refers to undefined volume mysql-data
+  mysql-data:

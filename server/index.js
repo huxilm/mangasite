@@ -156,10 +156,21 @@ function isOwnImagePath(p, id) {
 
 // 用连接池，不要每次请求都新建连接
 const pool = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
+  // ⚠ 四个值全部从环境变量读，一个都不写死。
+  // 原来 host / user / database 写死成 'localhost' / 'root' / 'mangasite'，
+  // 本机跑没问题，但容器里 'localhost' 指的是**容器自己** —— 它上面没有 MySQL。
+  // 报出来是 ECONNREFUSED 127.0.0.1:3306，看着像「MySQL 没开」，
+  // 真正的原因是地址指错了地方（容器里的 127.0.0.1 是容器）。
+  // 容器里由 docker-compose.yml 的 environment 指定成 db（mysql 容器的服务名）
+  //
+  // ⚠ 三个默认值仍然是原来那三个，所以本机 npm run dev 的行为一点没变 ——
+  // .env 里不写 DB_HOST 时它就回落到 localhost。
+  // 这也是为什么不把 DB_HOST 写进 .env：同一个 .env 两边共用，
+  // 而本机要 localhost、容器要 host.docker.internal，写死哪一个都会坏另一边
+  host: process.env.DB_HOST ?? 'localhost',
+  user: process.env.DB_USER ?? 'root',
   password: process.env.DB_PASSWORD,   // 值在 server/.env（不上传），不要写回这里
-  database: 'mangasite',
+  database: process.env.DB_NAME ?? 'mangasite',
   waitForConnections: true,
   connectionLimit: 10,
 });
@@ -490,7 +501,7 @@ app.put('/api/manga/:id/chapters', async (req, res) => {
     res.json({ message: '上传成功' });
   } catch (err) {
     // 回滚本身也可能失败（连接已经断了之类），别让它的异常盖住真正的错误
-    await conn.rollback().catch(() => {});
+    await conn.rollback().catch(() => { });
     console.error(err);
     res.status(500).json({ error: '上传失败' });
   } finally {
