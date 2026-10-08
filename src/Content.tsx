@@ -19,6 +19,9 @@ function Content() {
     // 1. 用 state 存后端返回的数据（初始是空数组）
     const [readList, setReadList] = useState<Manga[]>([])
     const [likedList, setLikedList] = useState<Manga[]>([])
+    // 「最近更新」那一盒。和上面两个排行榜同一个接口、同一次挂载，
+    // 所以下面 effect 里顺手就把它一起设了，不另开一个请求
+    const [updatedList, setUpdatedList] = useState<Manga[]>([])
 
     // 地址栏里的 ?tag=。导航栏「分类」下拉点一下就跳到 /?tag=xxx
     // （App.tsx 里用 <Link> 拼的），这里把它读出来。
@@ -40,8 +43,12 @@ function Content() {
         fetch('/api/mangasite')
             .then(r => r.json())           // 把响应体解析成 JSON 对象
             .then(data => {
-                setReadList(data['rows-mostread'])
-                setLikedList(data['rows-mostliked'])
+                // ⚠ 三个都用 ?? [] 兜一下。后端没重启的话新键是 undefined，
+                // 不兜就是 undefined.map(...) —— 整页白屏，而且从界面上完全
+                // 看不出是「后端还在跑旧代码」
+                setReadList(data['rows-mostread'] ?? [])
+                setLikedList(data['rows-mostliked'] ?? [])
+                setUpdatedList(data['rows-updated'] ?? [])
             })
     }, [])
 
@@ -93,6 +100,31 @@ function Content() {
                     ))}
                 </div>
             </div>
+
+            {/* 最近更新：全部漫画，按 updated_at 倒序。
+                 位置放在另外两盒后面是故意的 —— 那两块是 display:none，
+                 占不到地方，所以这一盒就是直接打开 / 时第一眼看到的东西。
+
+                 类名不借 .mostread-item / .tagresult-item，自己起一个。
+                 理由同 Content.css 里那段：那两块是「保持原样别再动」，
+                 借了类名就把三块绑在一起了。
+                 color 也不写死 #000000（那两块写死了），这一块是可见的，
+                 深色模式下 #000000 压在 #16171d 的底上是一个字都看不见的 */}
+            {!tag && (
+                <div className="recent-update">
+                    <div className="title">最近更新</div>
+                    <div className="item-list">
+                        {updatedList.map(manga => (
+                            <Link className="recentupdate-item" to={`/manga-overview/${manga.id}`} key={manga.id}>
+                                <div className="cover">
+                                    <img src={manga.cover ?? undefined} alt={manga.title} />
+                                </div>
+                                <span>{manga.title}</span>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* 按标签筛选的结果。?tag= 为空时整块连标题都不渲染，
                    所以没点分类的时候首页和改动前完全一样（那两块仍然是 display:none）。

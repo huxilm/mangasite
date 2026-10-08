@@ -178,7 +178,7 @@ pnpm dev
 | GET | `/api/manga` | — | 漫画列表。带 `?tag=热血` 则只返回带该标签的 |
 | GET | `/api/manga/:id` | — | 单本详情 |
 | GET | `/api/manga/lookup` | — | 按标题查 id（上传时查重名用） |
-| GET | `/api/mangasite` | — | 首页榜单：点阅前 8 + 爱心前 8 |
+| GET | `/api/mangasite` | — | 首页三个列表：全部漫画按 `updated_at` 倒序 + 点阅前 8 + 爱心前 8 |
 | PUT | `/api/manga/:id/tags` | — | 保存标签原文（`{"tags": "..."}`，上限 100 字符） |
 | DELETE | `/api/manga/:id` | — | 删除漫画，连带话、收藏、点赞和磁盘目录 |
 

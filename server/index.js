@@ -1068,7 +1068,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// 接口：一次返回「最多点阅」和「最多爱心」两个榜单
+// 接口：一次返回「最近更新」「最多点阅」「最多爱心」三个列表
 app.get('/api/mangasite', async (req, res) => {
   try {
     const [rowsMostread] = await pool.query(
@@ -1077,9 +1077,29 @@ app.get('/api/mangasite', async (req, res) => {
     const [rowsMostliked] = await pool.query(
       'SELECT id, title, author, created_at, updated_at, tags, cover, readcounts, lovecounts FROM manga ORDER BY lovecounts DESC LIMIT 8'
     );
+    // 最近更新：整表都要，所以**没有 LIMIT**（上面两条是榜单，才切前 8）。
+    // SELECT 的列照抄上面两条一个字不改 —— 三组行的字段必须完全一致，
+    // 前端才能拿同一个 Manga 类型接住它们。
+    //
+    // ⚠ 这一条现在实际等于「按创建时间倒序」：updated_at 只在 INSERT 时
+    //   写过一次（schema.sql 里那列只有 DEFAULT CURRENT_TIMESTAMP，没有
+    //   ON UPDATE），而几个 UPDATE manga 的路由（改标签 / 换封面 /
+    //   readcounts + 1 / lovecounts ± 1）一个都不碰它。
+    //   想让它真的反映「最近更新」，得在那三条改内容的语句里显式写
+    //   updated_at = NOW()，并且**绝不能**碰那两条计数的 —— 那两条也是
+    //   UPDATE manga，一起写的话用户点几下漫画，这个盒子的顺序就乱了。
+    //
+    // ⚠ 逗号后面那个 id DESC 不是装饰：updated_at 是 timestamp（秒精度），
+    //   同一秒里建出来的几本排不出先后，MySQL 返回的顺序是不确定的 ——
+    //   不加兜底，用户刷新几次会看到不同的排列。
+    //   （nav_link 那条 ORDER BY 踩过同一个坑，见上面 930 行附近）
+    const [rowsUpdated] = await pool.query(
+      'SELECT id, title, author, created_at, updated_at, tags, cover, readcounts, lovecounts FROM manga ORDER BY updated_at DESC, id DESC'
+    );
     res.json({
       'rows-mostread': rowsMostread,
       'rows-mostliked': rowsMostliked,
+      'rows-updated': rowsUpdated,
     });
   } catch (err) {
     console.error(err);

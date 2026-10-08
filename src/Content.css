@@ -109,3 +109,30 @@
   color: var(--text);
   font-size: 1rem;
 }
+
+/* ===== 最近更新（首页）。全部漫画，按 manga.updated_at 倒序 =====
+   和 .tag-result 一样**不写** display —— <div> 缺省就是 block，不写才看得见。
+   ⚠ 别和上面 .most-read / .most-liked 那两条 display: none 搞混：
+     那两块藏起来是「保持原样别再动」，这一块是要给人看的 */
+.recent-update {
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+/* 卡片。值抄自 .tagresult-item，不借它的类名（理由见上面那一段）
+   color 同样是 inherit 而不是 #000000 —— 这一块可见，深色模式下
+   #000000 压在 #16171d 的底上是一个字都看不见的 */
+.recentupdate-item {
+  font-size: 1.1rem;
+  font-weight: 500;
+  text-align: left;
+  color: inherit;
+  text-decoration: none;
+}
+.recentupdate-item .cover img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 0.25rem;
+  display: block;
+}
