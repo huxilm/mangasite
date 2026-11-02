@@ -98,7 +98,17 @@ type PlannedPage = {
 
 type UploadResult =
   | { ok: true; mangaId: string }
-  | { ok: false; error: string; fatal: boolean; conflictId?: string; failed?: number }
+  | {
+      ok: false
+      error: string
+      fatal: boolean
+      conflictId?: string        // 第一步标题撞车：已存在的那本的 id
+      chapterConflict?: number[] // 第三步话号撞车：已存在的那几话
+      // 走完第一步拿到的 id。失败时也带回去：点「替换」重试时得用它，
+      // 不然第一步会再发一次建本请求、拿回 409，重试就卡在标题撞车那一步了
+      mangaId?: string
+      failed?: number
+    }
 
 // ===== 纯函数 =====
 
@@ -360,6 +370,10 @@ type RunUploadOptions = {
   autoCover: boolean          // true = 用第一话第一页当封面（只有新本该这么做）
   sent: Set<string>           // 已传成功的页，键和 PlannedPage.key 一致
   paths: Map<string, string>  // 页 → 服务端返回的路径
+  // true = 第三步提交时带 overwrite，话号撞车时用这次的内容替换掉旧话。
+  // 只有用户在「第 N 话已经存在」那条横幅上点了「替换」才会是 true ——
+  // 续本时手滑填了个已有话号，不能悄悄把旧内容换掉
+  overwrite: boolean
   onProgress: (done: number, total: number) => void
 }
 
@@ -496,12 +510,25 @@ async function runUpload(opts: RunUploadOptions): Promise<UploadResult> {
           pages: c.pages.map((_, i) => opts.paths.get(`${c.number}:${i}`)),
         })),
         cover: coverPath,
+        // 后端只在它是**布尔 true** 时才替换撞号的话；不传 / false 都是旧行为（409）
+        overwrite: opts.overwrite,
       }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
 
     if (!res.ok) {
       const data = await res.json().catch(() => null)
+      // 409 = 话号撞车。后端把撞车的话号放在 chapters 里，带回去让弹窗问一句。
+      // 图已经全部传上去了（第二步），所以重试时 sent 集合还在，不会再传一遍
+      if (res.status === 409 && Array.isArray(data?.chapters)) {
+        return {
+          ok: false,
+          error: data?.error ?? `HTTP ${res.status}`,
+          fatal: true,
+          chapterConflict: data.chapters,
+          mangaId: mangaId ?? undefined,
+        }
+      }
       return { ok: false, error: data?.error ?? `HTTP ${res.status}`, fatal: !isRetryable(res.status) }
     }
   } catch {
@@ -544,6 +571,10 @@ function UploadModal({ onClose }: { onClose: () => void }) {
   // 第 1 步建好了、但内容没传完的那本。让用户确认后才接着用
   const [createdId, setCreatedId] = useState<string | null>(null)
   const [conflictId, setConflictId] = useState<string | null>(null)
+  // 第 3 步话号撞车：后端告诉我们是哪几话已经存在。非 null 时顶部横幅问
+  // 「替换成这次的内容？」。续本时手滑填了个已有话号也会走到这里 ——
+  // 正因为如此，不能自动替换，必须让用户看一眼
+  const [chapterConflict, setChapterConflict] = useState<number[] | null>(null)
   // 上次留下、还没传完的记录（localStorage 里翻出来的）。
   // 用惰性初始化而不是放在 useEffect 里读：这样只读一次、只 render 一次。
   // 写成「初始 null + 挂载后 setState」的话，弹窗每次打开都要先白渲染一轮空状态
@@ -669,6 +700,8 @@ function UploadModal({ onClose }: { onClose: () => void }) {
     // 两处是绑着的：要是哪天把封面块改成不依赖 picked，这里必须跟着改成 `if (picked)`，
     // 否则「先挑封面、再选文件夹」会把用户刚选的封面清掉
     setCoverFile(null)
+    // 换了文件夹，上一条「第 N 话已存在」的横幅也就不作数了
+    setChapterConflict(null)
     // 目录树变了，已传记录全部作废 —— 见 sentRef 那段注释
     sentRef.current = new Set()
     pathsRef.current = new Map()
@@ -725,6 +758,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
     setChapterTitle('')
     setCreatedId(null)
     setConflictId(null)
+    setChapterConflict(null)
     sentRef.current = new Set()
     pathsRef.current = new Map()
     scopeRef.current = ''
@@ -736,7 +770,10 @@ function UploadModal({ onClose }: { onClose: () => void }) {
     setUploading(false)
   }
 
-  const handleSubmit = async () => {
+  // overwrite 只由「第 N 话已经存在」横幅上那个「替换」按钮传 true。
+  // 普通点上传永远走默认的 false —— 续本时手滑填了个已有话号，
+  // 不该悄悄把旧内容换掉
+  const handleSubmit = async (overwrite = false) => {
     // 用 ref 判断而不是 state：这个函数在同一次点击里会先 setUploading(true)
     // 再去 await，过程中闭包读到的 state 还是旧值，守卫等于没生效
     if (uploadingRef.current) return
@@ -807,17 +844,21 @@ function UploadModal({ onClose }: { onClose: () => void }) {
       return
     }
 
-    // 换了文件夹（或者换了漫画）就把已传记录清空
+    // 换了文件夹（或者换了漫画）就把已传记录清空。
+    // ⚠ overwrite（点「替换」重试）时不清：那一次重试的正是同一本，只是
+    //   createdId 刚被填上，scope 的 id 段从 'new' 变成了真实 id。按字符串比
+    //   会判成「换了漫画」，把磁盘上已经传好的页全清掉重传一遍
     const scope = `${effectiveId ?? resumeId.trim() ?? 'new'}|${treeSignature(picked)}`
-    if (scopeRef.current !== scope) {
-      scopeRef.current = scope
+    if (!overwrite && scopeRef.current !== scope) {
       sentRef.current = new Set()
       pathsRef.current = new Map()
     }
+    scopeRef.current = scope
 
     uploadingRef.current = true
     setUploading(true)
     setConflictId(null)
+    setChapterConflict(null)
     setToast(null)
     // 先把总数填上。新本要先发一个「建漫画」的请求，那一个来回里
     // runUpload 还没报过进度，不预置的话按钮会显示「上传中… 0/0」，
@@ -842,6 +883,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
       autoCover: isNew,
       sent: sentRef.current,
       paths: pathsRef.current,
+      overwrite,
       onProgress,
     })
 
@@ -860,13 +902,40 @@ function UploadModal({ onClose }: { onClose: () => void }) {
       setCreatedId(result.conflictId)
       setConflictId(result.conflictId)
     }
+    if (result.chapterConflict) {
+      // 话号撞车。图都已经在磁盘上了，用户点了「替换」之后重跑只会补传失败页
+      // （sent 集合还在），然后带 overwrite: true 重新提交第三步。
+      // 重试必须直接用这个 id —— createdId 不填的话，第一步会再发一次建本请求
+      // 拿回 409，横幅变成「标题已存在」，点「替换」的那次 overwrite 就白费了
+      if (result.mangaId) setCreatedId(result.mangaId)
+      setChapterConflict(result.chapterConflict)
+    }
     setToast({ message: result.error, type: 'warning' })
     endUpload()
   }
 
   // 顶部那几条横幅（都是「有件事需要你先决定」）
   // 处理之前未传完的
-  const banner = isNew && stale ? (
+  const banner = chapterConflict ? (
+    <div className="upload-banner">
+      第 {chapterConflict.join('、')} 话已经存在了。用这次上传的内容替换掉旧的那几话？
+      <div className="upload-banner-actions">
+        <button
+          type="button"
+          className="modal-btn modal-btn-primary"
+          onClick={() => {
+            setChapterConflict(null)
+            handleSubmit(true)
+          }}
+        >
+          替换
+        </button>
+        <button type="button" className="modal-btn" onClick={() => setChapterConflict(null)}>
+          取消
+        </button>
+      </div>
+    </div>
+  ) : isNew && stale ? (
     <div className="upload-banner">
       上次有一本'{stale.title}'没传完。重新选同一个文件夹再点上传，已传过的页会自动跳过。
       <div className="upload-banner-actions">

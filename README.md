@@ -188,7 +188,7 @@ pnpm dev
 |---|---|---|---|
 | POST | `/api/manga` | — | 第一步：建漫画行，返回新 id |
 | POST | `/api/manga/:id/image` | — | 第二步：传一页图。原始二进制，`?chapter=1&index=0`（封面传 `chapter=cover`） |
-| PUT | `/api/manga/:id/chapters` | — | 第三步：一次提交所有话 + 封面 |
+| PUT | `/api/manga/:id/chapters` | — | 第三步：一次提交所有话 + 封面。带 `overwrite: true` 时撞号的话被替换，不带则返回 409（响应里的 `chapters` 是撞号的话号） |
 
 ### 阅读
 

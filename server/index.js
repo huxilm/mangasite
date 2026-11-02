@@ -163,6 +163,47 @@ function isOwnImagePath(p, id) {
   return p.startsWith(`/uploads/${dirPrefixOf(id)}`);
 }
 
+// 提交成功之后，把这次被替换掉、又没人再引用的旧图从磁盘删掉。
+//
+// 为什么需要这一步：文件名带扩展名，而扩展名是按魔术字节定的。原来传的是
+// webp、这次压缩输出 jpg，写出来就是两个不同的文件 —— 数据库已经指向新的，
+// 旧的留在磁盘上永远没人访问，也不会有人提醒你。
+//
+// 判断依据是**提交之后**的数据库内容，不是「新旧差集」：
+//   · 封面可能正好就是被替换的某一页（新本的自动封面就是这样）
+//   · 别的话将来也可能引用同一个文件
+// 只有确认没人引用才删。
+//
+// ⚠ 只能在事务提交之后调。提前删的话，一旦提交失败，
+//   数据库里还指着这些文件，页面会当场裂图
+async function deleteOrphanImages(conn, id, candidates) {
+  if (candidates.length === 0) return;
+
+  const [rows] = await conn.query('SELECT pages FROM chapters WHERE manga_id = ?', [id]);
+  const [coverRows] = await conn.query('SELECT cover FROM manga WHERE id = ?', [id]);
+
+  const keep = new Set();
+  for (const r of rows) {
+    for (const p of r.pages ?? []) keep.add(p);
+  }
+  if (coverRows[0]?.cover) keep.add(coverRows[0].cover);
+
+  for (const p of candidates) {
+    if (keep.has(p)) continue;
+    // isOwnImagePath 已经挡掉了 '..'、'%'、'\\'、'//'；这里再确认一遍，
+    // 因为这一行决定的是「删磁盘上的哪个文件」，值得多一道保险
+    if (!isOwnImagePath(p, id)) continue;
+
+    const abs = path.join(uploadsDir, p.slice('/uploads/'.length));
+    try {
+      await fs.promises.unlink(abs);
+    } catch (err) {
+      // ENOENT 是正常的：同一页被替换了两次，或者上一次已经删过
+      if (err.code !== 'ENOENT') console.error('清理旧图失败：', abs, err);
+    }
+  }
+}
+
 // 用连接池，不要每次请求都新建连接
 const pool = mysql.createPool({
   // ⚠ 四个值全部从环境变量读，一个都不写死。
@@ -413,7 +454,9 @@ app.post(
 // 这一步只写数据库。
 app.put('/api/manga/:id/chapters', async (req, res) => {
   const { id } = req.params;
-  const { chapters, cover } = req.body ?? {};
+  // overwrite：可选，只有客户端明确说「把已有的那几话换成这次传的」时才传 true。
+  // 不传等价于旧行为 —— 撞号就 409
+  const { chapters, cover, overwrite } = req.body ?? {};
 
   // ===== 第一步：把所有校验做完，再去跟连接池要连接 =====
   // 这个顺序是有意的。连接池只有 10 条，下面一旦拿到连接就必须负责归还；
@@ -469,17 +512,32 @@ app.put('/api/manga/:id/chapters', async (req, res) => {
 
   const conn = await pool.getConnection();
   try {
-    // 确认这本漫画真的存在（id 是客户端传的，不可信）
-    const [m] = await conn.query('SELECT id FROM manga WHERE id = ?', [id]);
+    // 确认这本漫画真的存在（id 是客户端传的，不可信）。
+    // 顺手把旧封面取出来：下面换封面之后，旧的那个可能就没人引用了
+    const [m] = await conn.query('SELECT id, cover FROM manga WHERE id = ?', [id]);
     if (m.length === 0) return res.status(404).json({ error: '漫画不存在' });
+    const oldCover = m[0].cover;
 
-    // 再和库里已有的行查重（续本时可能和已有的话撞号）
+    // 再和库里已有的行查重（续本时可能和已有的话撞号）。
+    // overwrite 为 true 时撞号不算错 —— 那是「整本重传」：同名漫画重建时
+    // 第 1 话一定已经存在了，把那一话的 pages 换掉正是想要的结果。
+    // ⚠ 只有客户端显式带 overwrite 才替换。续本时手滑填了个已有的话号
+    //   仍然是 409 —— 否则旧内容会被悄悄换成新的，而且没有任何提示
     const [dup] = await conn.query(
-      `SELECT chapter_number FROM chapters WHERE manga_id = ? AND chapter_number IN (${numbers.map(() => '?').join(',')})`,
+      `SELECT chapter_number, pages FROM chapters WHERE manga_id = ? AND chapter_number IN (${numbers.map(() => '?').join(',')})`,
       [id, ...numbers]
     );
-    if (dup.length > 0) {
-      return res.status(409).json({ error: `第 ${dup[0].chapter_number} 话已经存在了` });
+    const existing = new Set(dup.map(r => r.chapter_number));
+    // 被替换掉的那几话原来指向的页。提交成功后拿它们和数据库对一遍，
+    // 没人再引用的就从磁盘删掉（见 deleteOrphanImages）
+    const oldPages = dup.flatMap(r => r.pages ?? []);
+    if (existing.size > 0 && overwrite !== true) {
+      return res.status(409).json({
+        error: `第 ${dup[0].chapter_number} 话已经存在了`,
+        // 撞号的话号一起回给前端，它要拿来显示「替换第 N 话」那个按钮。
+        // 只给一句 error 的话，前端还得从字符串里抠数字
+        chapters: [...existing],
+      });
     }
 
     // 一次要插好几话，中途失败会留下「有第 1 话和第 3 话、没有第 2 话」的残缺漫画。
@@ -487,17 +545,24 @@ app.put('/api/manga/:id/chapters', async (req, res) => {
     await conn.beginTransaction();
 
     for (const c of chapters) {
-      await conn.query(
-        'INSERT INTO chapters (manga_id, chapter_number, title, pages) VALUES(?, ?, ?, ?)',
-        [
-          id,
-          c.chapterNumber,
-          // 章节标题是可选的：空字符串存进去会在界面上显示成一个空的标题位，
-          // 不如存 NULL 让前端用 `第 N 话` 兜底
-          String(c.title ?? '').trim() || null,
-          JSON.stringify(c.pages),
-        ]
-      );
+      // 章节标题是可选的：空字符串存进去会在界面上显示成一个空的标题位，
+      // 不如存 NULL 让前端用 `第 N 话` 兜底
+      const title = String(c.title ?? '').trim() || null;
+
+      if (existing.has(c.chapterNumber)) {
+        // 替换已有那一话：只换 title 和 pages，id / created_at 保留。
+        // 不写成「先 DELETE 再 INSERT」是因为那样会换一个新 id，
+        // 万一别处引用过章节 id 就断了，而且 created_at 也会被重置
+        await conn.query(
+          'UPDATE chapters SET title = ?, pages = ? WHERE manga_id = ? AND chapter_number = ?',
+          [title, JSON.stringify(c.pages), id, c.chapterNumber]
+        );
+      } else {
+        await conn.query(
+          'INSERT INTO chapters (manga_id, chapter_number, title, pages) VALUES(?, ?, ?, ?)',
+          [id, c.chapterNumber, title, JSON.stringify(c.pages)]
+        );
+      }
     }
 
     if (cover) {
@@ -507,6 +572,16 @@ app.put('/api/manga/:id/chapters', async (req, res) => {
     }
 
     await conn.commit();
+
+    // 提交成功之后才清理旧图。这一步失败不能影响「已经成功」这个事实 ——
+    // 外面的 catch 会回滚（这时已经没事务了）并返回 500，前端就会以为没传上去，
+    // 而后台其实已经落库了，用户一点重试就会重复插话
+    try {
+      await deleteOrphanImages(conn, id, [...oldPages, ...(oldCover ? [oldCover] : [])]);
+    } catch (err) {
+      console.error('清理旧图失败：', err);
+    }
+
     res.json({ message: '上传成功' });
   } catch (err) {
     // 回滚本身也可能失败（连接已经断了之类），别让它的异常盖住真正的错误
