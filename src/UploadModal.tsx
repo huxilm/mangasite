@@ -872,7 +872,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
       <div className="upload-banner-actions">
         <button
           type="button"
-          className="modal-btn"
+          className="modal-btn modal-btn-primary"
           onClick={() => {
             setCreatedId(stale.id)
             setTitle(stale.title)
@@ -900,7 +900,7 @@ function UploadModal({ onClose }: { onClose: () => void }) {
       <div className="upload-banner-actions">
         <button
           type="button"
-          className="modal-btn"
+          className="modal-btn modal-btn-primary"
           onClick={() => {
             // createdId 已经在撞车时设好了，这里只是把这个提示收起来
             setConflictId(null)

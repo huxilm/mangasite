@@ -251,13 +251,29 @@
   margin-top: 0.4rem;
 }
 /* 覆盖 .modal-btn 的 width:40%。那两个按钮是按「新本/续本」各占四成、
-   刚好铺满一行写的；这里是两个小按钮靠左站着，宽度按文字来 */
+   刚好铺满一行写的；这里是两个小按钮靠左站着，宽度按文字来
+
+   ⚠ color 必须显式写。index.css 的 :root 开了 color-scheme: light dark，
+   深色模式下按钮的文字颜色是浏览器的 ButtonText —— 也就是白色；
+   只写 background: #fff 的话就是白字压白底，「是我的，继续」完全看不见 */
 .upload-modal .upload-banner-actions .modal-btn{
   width: auto;
   padding: 0.2rem 0.5rem;
   font-size: 0.8rem;
+  color: #7a4b00;
   background: #fff;
   border: 1px solid #ffd8a8;
+}
+/* 肯定动作（「接着传」「是我的，继续」）用实心按钮，和旁边那个
+   「忽略 / 不是，我改个标题」区分开。颜色取自横幅自己的琥珀色系。
+   写在上面那条之后，三条类名一样多，靠顺序盖住 background */
+.upload-modal .upload-banner-actions .modal-btn-primary{
+  color: #fff;
+  background: #7a4b00;
+  border-color: #7a4b00;
+}
+.upload-modal .upload-banner-actions .modal-btn-primary:hover{
+  background: #6b4200;
 }
 
 /* ===== 上传进度 ===== */
