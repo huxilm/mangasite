@@ -95,6 +95,12 @@
 }
 .reader .page{
   width: auto;
-  max-width: 100%;           /* 不超出屏幕宽度 */
+  /* 漫画页最多占浏览器宽度的一半。
+     用 vw 而不是 %：50vw 直接对浏览器视口算，和 .reader / #root 有多宽
+     无关；% 是相对 .reader 的，哪天 .reader 本身被收窄了，这里会跟着缩，
+     就不是「浏览器的一半」了。
+     ⚠ width 仍然是 auto，别改成 50vw —— 那样原图比一半窄时也会被
+     放大到一半，小图会糊。auto + max-width 只封顶、不放大 */
+  max-width: 50vw;
   display: block;
 }
