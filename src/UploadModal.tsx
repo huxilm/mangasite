@@ -236,6 +236,76 @@ function isRetryable(status: number): boolean {
   return status >= 500 || status === 408 || status === 429
 }
 
+// ===== 上传前压缩 =====
+//
+// 扫描原图动辄十几 MB，一话又有几十页；服务端出口就 2–4 Mbps，
+// 一张 19 MB 的图在公网要下 70 多秒。慢的根子是字节数，不是带宽。
+// 这里在发请求前把图缩到长边 maxEdge 以内，典型能把体积降两个数量级
+// （19 MB → 300 KB 上下）。
+//
+// 用 canvas + toBlob，不引依赖。输出固定 JPEG，于是：
+//   · 服务端按魔术字节定扩展名（server/index.js:353），写出来的还是
+//     ch01/000.jpg / cover.jpg 这些老路径，重传同一本会**就地覆盖**旧的大图，
+//     不会留下一份没人引用的孤儿
+//   · 代价是 PNG/GIF 的透明通道没了，所以下面要先铺一层白底；
+//     顺便，GIF 动了画也只会剩第一帧 —— 漫画页本来就不该是动图
+const COMPRESS_MAX_EDGE = 1600       // 漫画页长边。阅读页最多占 50vw，够了
+const COVER_MAX_EDGE = 800           // 封面只在首页的小格子里显示，用不着 1600
+const COMPRESS_QUALITY = 0.82
+// 本来就小的图不再压：重编码可能反而变大，而且白耗 CPU
+const COMPRESS_SKIP_BYTES = 300 * 1024
+
+// 把一张图缩到长边 maxEdge 以内并转成 JPEG。
+// 任何一步失败（文件损坏、浏览器解不了这个格式、内存不够）都原样返回 ——
+// 压缩是为了省流量，不能变成上传失败的新原因。
+// 这里吞掉所有异常，调用方可以当它不会 reject
+async function compressImage(file: File, maxEdge: number): Promise<File> {
+  if (file.size <= COMPRESS_SKIP_BYTES) return file
+
+  const url = URL.createObjectURL(file)
+  try {
+    const img = new Image()
+    img.src = url
+    // decode() 对坏文件 / 不认识的格式会抛，正好落到下面的 catch。
+    // 用 decode() 而不是 onload：onload 还得自己包一层 Promise，
+    // 而且它只管「读到了」，不管「解得开」
+    await img.decode()
+
+    // 只缩不放大：原图比 maxEdge 小时 scale 就是 1。
+    // naturalWidth 是 0 的坏图会得到 0×0，直接退回原文件
+    const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight))
+    const w = Math.round(img.naturalWidth * scale)
+    const h = Math.round(img.naturalHeight * scale)
+    if (w === 0 || h === 0) return file
+
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return file
+
+    // JPEG 没有透明通道。不铺白底的话，PNG/GIF 的透明区域会变成黑色，
+    // 而漫画页本来就是白底 —— 会多出一整片黑
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, w, h)
+    ctx.drawImage(img, 0, 0, w, h)
+
+    const blob = await new Promise<Blob | null>(resolve =>
+      canvas.toBlob(resolve, 'image/jpeg', COMPRESS_QUALITY),
+    )
+    // toBlob 可能失败（内存不足），也可能压完比原图还大 —— 两种都退回原文件。
+    // 文件名换不换其实无所谓：服务端从来不读它，文件名是自己按话号 + 页号拼的
+    if (!blob || blob.size >= file.size) return file
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, '')}.jpg`, { type: 'image/jpeg' })
+  } catch {
+    return file
+  } finally {
+    // 不释放的话每张图都留着一份解码前的原始数据，
+    // 几百页传下来标签页内存会一路涨
+    URL.revokeObjectURL(url)
+  }
+}
+
 // 上传一页，返回它的最终路径（或者失败原因）。
 // 不做任何重试：重试的策略在上一层，这里只负责如实报告这一次的结果
 async function uploadOne(
@@ -246,12 +316,17 @@ async function uploadOne(
   const query = new URLSearchParams({ chapter: String(job.chapter), index: String(job.index) })
 
   try {
+    // 先压再传。封面在首页只占一个小格子，单独用更小的上限。
+    // compressImage 自己吞掉所有异常、失败就返回原文件，所以这里不用再包一层 try，
+    // 也不会在下面的 catch 里被误报成「网络错误」
+    const body = await compressImage(job.file, job.chapter === 'cover' ? COVER_MAX_EDGE : COMPRESS_MAX_EDGE)
+
     const res = await fetch(`/api/manga/${mangaId}/image?${query}`, {
       method: 'POST',
       // 不手写 Content-Type：交给浏览器按 File 的类型自动带。
       // 后端的 express.raw 配的是 type: () => true，带不带都收
       headers: { Authorization: `Bearer ${token}` },
-      body: job.file,
+      body,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
 

@@ -144,9 +144,24 @@ function MangaRead() {
 
       {/* 逐页展示漫画页面。
           pages 兜底成空数组：它是 json 列，历史上写进过 NULL 的坏数据，
-          直接 .map 会 TypeError 把整个页面炸掉 */}
+          直接 .map 会 TypeError 把整个页面炸掉
+
+          loading="lazy"：一话几十页，不加的话浏览器会同时去拉全部图片，
+          视口里那一页反而抢不到带宽（浏览器对同一域名的并发连接数是有上限的）。
+          加了之后只下视口附近的，往下滚再逐页取。
+          浏览器对「已经在视口里的图」本来就不延迟，所以第一页不用特殊处理。
+
+          decoding="async"：解码不占主线程的渲染帧，滚动更顺。
+          和 loading 是两个独立的开关，别以为写了 lazy 就自动带上 */}
       {(chapter?.pages ?? []).map((src, i) => (
-        <img key={src} className="page" src={src} alt={`第 ${i + 1} 页`} />
+        <img
+          key={src}
+          className="page"
+          src={src}
+          alt={`第 ${i + 1} 页`}
+          loading="lazy"
+          decoding="async"
+        />
       ))}
 
       {/* 底部再放一次「下一话」。一话几十页，看完滚到底还要再滚回顶部去点，

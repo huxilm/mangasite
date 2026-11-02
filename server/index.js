@@ -41,7 +41,16 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 // 挂成静态目录：这样 /uploads/m_5_某本漫画/ch01/001.jpg 就能直接被浏览器访问到。
 // 注意这是个前缀匹配，路径变深（多一层漫画目录、再一层话目录）它照样管用，
 // 不需要为新的目录结构改任何东西
-app.use('/uploads', express.static(uploadsDir));
+//
+// maxAge: '1d' 把响应头从默认的 public, max-age=0 改成 public, max-age=86400。
+// 默认的 max-age=0 意味着浏览器每次用之前都得回来协商一次 —— 304 虽然不带
+// 图片内容，但一个 RTT 跑不掉，一话几十页就是几十次纯等待。
+//
+// ⚠ 不能改成 immutable + 一年：文件名是固定的，重传一页覆盖的就是同一个
+// ch01/000.jpg（见下面图片上传那条路由）。长缓存会让用户一直看到旧图。
+// 1 天的取舍是「一天内重复看不回源」对「重传之后最多一天生效」。
+// ETag / Last-Modified 不受影响，expire 之后照样能走 304
+app.use('/uploads', express.static(uploadsDir, { maxAge: '1d' }));
 
 // ===== 上传相关的工具函数 =====
 
