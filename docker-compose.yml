@@ -135,9 +135,9 @@ services:
     image: mangasite-web
 
     ports:
-      # 宿主机 8080 → 容器 80。左边随便挑一个没被占的；
+      # 宿主机 30080 → 容器 80。左边随便挑一个没被占的；
       # 右边 80 不能改，nginx.conf 里写死的是 listen 80
-      - "8080:80"
+      - "30080:80"
 
     depends_on:
       # 这里用简写就够：nginx 要的只是 backend 这个名字能解析出来，
